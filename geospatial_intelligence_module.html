@@ -1,1127 +1,1016 @@
 <!doctype html>
 <html lang="en">
-	<head>
-		<meta charset="UTF-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>Prudent | Geospatial Intelligence Suite</title>
-		<!-- Tailwind CSS -->
-		<script src="https://cdn.tailwindcss.com"></script>
-		<!-- Lucide Icons -->
-		<script src="https://unpkg.com/lucide@latest"></script>
-		<!-- Chart.js for data visualization -->
-		<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-		<!-- Leaflet CSS & JS (for GEE tile overlay) -->
-		<link
-			rel="stylesheet"
-			href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-		/>
-		<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Prudent | Geospatial Intelligence Suite</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Chart.js for data visualization -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+    <!-- Leaflet CSS & JS (for GEE tile overlay) -->
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-		<style>
-			@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap");
+    <!-- GeoRaster for rendering TIFs -->
+    <script src="https://unpkg.com/geotiff@2.1.3/dist-browser/geotiff.js"></script>
+    <script src="https://unpkg.com/georaster@1.6.0/dist/georaster.browser.bundle.min.js"></script>
+    <script src="https://unpkg.com/georaster-layer-for-leaflet@3.8.0/dist/georaster-layer-for-leaflet.min.js"></script>
 
-			body {
-				font-family: "Inter", sans-serif;
-			}
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap");
 
-			.custom-map-tooltip {
-				background: rgba(255, 255, 255, 0.95);
-				backdrop-filter: blur(4px);
-				padding: 8px 12px;
-				pointer-events: none;
-			}
+      body {
+        font-family: "Inter", sans-serif;
+      }
 
-			.purple-glow {
-				box-shadow: 0 4px 25px -4px rgba(123, 44, 191, 0.08);
-			}
+      .custom-map-tooltip {
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(4px);
+        padding: 8px 12px;
+        pointer-events: none;
+      }
 
-			/* Custom scrollbar for multi-select areas */
-			::-webkit-scrollbar {
-				width: 6px;
-				height: 6px;
-			}
+      .purple-glow {
+        box-shadow: 0 4px 25px -4px rgba(123, 44, 191, 0.08);
+      }
 
-			::-webkit-scrollbar-track {
-				background: #f1f5f9;
-			}
+      /* Custom scrollbar for multi-select areas */
+      ::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+      }
 
-			::-webkit-scrollbar-thumb {
-				background: #cbd5e1;
-				border-radius: 10px;
-			}
+      ::-webkit-scrollbar-track {
+        background: #f1f5f9;
+      }
 
-			::-webkit-scrollbar-thumb:hover {
-				background: #94a3b8;
-			}
+      ::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 10px;
+      }
 
-			/* Dropdown custom styles */
-			.dropdown-content {
-				display: none;
-			}
+      ::-webkit-scrollbar-thumb:hover {
+        background: #94a3b8;
+      }
 
-			.dropdown-content.show {
-				display: block;
-			}
-		</style>
-	</head>
+      /* Dropdown custom styles */
+      .dropdown-content {
+        display: none;
+      }
 
-	<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
-		<!-- BACKEND STATUS BANNER -->
-		<div
-			id="backendBanner"
-			class="hidden bg-red-50 border-b border-red-200 px-8 py-2 text-xs text-red-700 flex items-center gap-2"
-		>
-			<i data-lucide="server-off" class="w-4 h-4"></i>
-			<span id="backendBannerMsg"
-				>Cannot reach Flask backend at localhost:5050. Run:
-				<code class="bg-red-100 px-1 rounded"
-					>python gee_backend.py</code
-				></span
-			>
-		</div>
+      .dropdown-content.show {
+        display: block;
+      }
+    </style>
+  </head>
 
-		<!-- GLOBAL APP HEADER & IN-PAGE NAVIGATION -->
-		<div
-			class="bg-white border-b border-slate-200 shrink-0 z-20 shadow-sm relative"
-		>
-			<header class="px-8 py-4 flex justify-between items-center">
-				<div class="flex items-center gap-6">
-					<div
-						class="w-10 h-10 bg-purple-100 text-purple-700 font-bold text-xl rounded-xl flex items-center justify-center tracking-wider"
-					>
-						P
-					</div>
-					<div>
-						<h1
-							class="text-2xl font-bold text-slate-900 tracking-tight"
-							id="headerTitle"
-						>
-							Construction Progress
-						</h1>
-						<p
-							class="text-xs text-slate-500 mt-0.5"
-							id="headerSubtitle"
-						>
-							Multi-temporal remote sensing & asset tracking
-						</p>
-					</div>
-				</div>
-				<div class="text-right flex items-center gap-6">
-					<div class="text-right hidden sm:block">
-						<span
-							class="text-sm font-semibold text-purple-900 block tracking-wide"
-							>Prudent</span
-						>
-						<span class="text-xs text-slate-400 font-medium"
-							>Geospatial Intelligence</span
-						>
-					</div>
-					<button
-						class="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition"
-					>
-						<i data-lucide="log-out" class="w-5 h-5"></i>
-					</button>
-				</div>
-			</header>
+  <body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
+    <!-- BACKEND STATUS BANNER -->
+    <div
+      id="backendBanner"
+      class="hidden bg-red-50 border-b border-red-200 px-8 py-2 text-xs text-red-700 flex items-center gap-2"
+    >
+      <i data-lucide="server-off" class="w-4 h-4"></i>
+      <span id="backendBannerMsg"
+        >Cannot reach Flask backend at localhost:5050. Run:
+        <code class="bg-red-100 px-1 rounded">python gee_backend.py</code></span
+      >
+    </div>
 
-			<!-- INTEGRATED NAVIGATION BAR -->
-			<nav
-				class="px-8 flex gap-2 overflow-x-auto bg-slate-50/50 border-t border-slate-100"
-			>
-				<button
-					onclick="switchView('upload')"
-					id="nav-upload"
-					class="nav-btn px-4 py-3 text-sm font-semibold text-slate-500 hover:text-purple-700 hover:bg-purple-50 border-b-2 border-transparent transition flex items-center gap-2 whitespace-nowrap"
-				>
-					<i data-lucide="upload-cloud" class="w-4 h-4"></i> Upload
-					Assets
-				</button>
-				<button
-					onclick="switchView('dashboard')"
-					id="nav-dashboard"
-					class="nav-btn px-4 py-3 text-sm font-semibold text-slate-500 hover:text-purple-700 hover:bg-purple-50 border-b-2 border-transparent transition flex items-center gap-2 whitespace-nowrap"
-				>
-					<i data-lucide="layout-dashboard" class="w-4 h-4"></i>
-					Portfolio Dashboard
-				</button>
-				<button
-					onclick="switchView('catchment')"
-					id="nav-catchment"
-					class="nav-btn px-4 py-3 text-sm font-semibold text-slate-500 hover:text-purple-700 hover:bg-purple-50 border-b-2 border-transparent transition flex items-center gap-2 whitespace-nowrap"
-				>
-					<i data-lucide="radar" class="w-4 h-4"></i> Catchment
-					Analysis
-				</button>
-				<button
-					onclick="switchView('construction')"
-					id="nav-construction"
-					class="nav-btn px-4 py-3 text-sm font-semibold text-purple-700 bg-white border-b-2 border-purple-700 transition flex items-center gap-2 whitespace-nowrap shadow-[0_-4px_6px_-6px_rgba(0,0,0,0.1)]"
-				>
-					<i data-lucide="history" class="w-4 h-4"></i> Construction
-					Progress
-				</button>
-			</nav>
-		</div>
+    <!-- GLOBAL APP HEADER & IN-PAGE NAVIGATION -->
+    <div
+      class="bg-white border-b border-slate-200 shrink-0 z-20 shadow-sm relative"
+    >
+      <header class="px-8 py-4 flex justify-between items-center">
+        <div class="flex items-center gap-6">
+          <div
+            class="w-10 h-10 bg-purple-100 text-purple-700 font-bold text-xl rounded-xl flex items-center justify-center tracking-wider"
+          >
+            P
+          </div>
+          <div>
+            <h1
+              class="text-2xl font-bold text-slate-900 tracking-tight"
+              id="headerTitle"
+            >
+              Construction Progress
+            </h1>
+            <p class="text-xs text-slate-500 mt-0.5" id="headerSubtitle">
+              Multi-temporal remote sensing & asset tracking
+            </p>
+          </div>
+        </div>
+        <div class="text-right flex items-center gap-6">
+          <div class="text-right hidden sm:block">
+            <span
+              class="text-sm font-semibold text-purple-900 block tracking-wide"
+              >Prudent</span
+            >
+            <span class="text-xs text-slate-400 font-medium"
+              >Geospatial Intelligence</span
+            >
+          </div>
+          <button
+            class="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition"
+          >
+            <i data-lucide="log-out" class="w-5 h-5"></i>
+          </button>
+        </div>
+      </header>
 
-		<!-- DASHBOARD SCROLL CONTAINER -->
-		<main class="flex-1 overflow-y-auto p-8 bg-slate-50/50 relative">
-			<!-- ================= VIEW 1: UPLOAD ================= -->
-			<div
-				id="view-upload"
-				class="view-section hidden max-w-4xl mx-auto space-y-6"
-			>
-				<div
-					class="bg-white rounded-xl border border-slate-200 p-8 purple-glow space-y-7"
-				>
-					<h2
-						class="text-lg font-bold text-slate-900 flex items-center gap-2"
-					>
-						<i
-							data-lucide="file-up"
-							class="w-5 h-5 text-purple-700"
-						></i>
-						Import Geospatial Asset Boundaries
-					</h2>
+      <!-- INTEGRATED NAVIGATION BAR -->
+      <nav
+        class="px-8 flex gap-2 overflow-x-auto bg-slate-50/50 border-t border-slate-100"
+      >
+        <button
+          onclick="switchView('upload')"
+          id="nav-upload"
+          class="nav-btn px-4 py-3 text-sm font-semibold text-slate-500 hover:text-purple-700 hover:bg-purple-50 border-b-2 border-transparent transition flex items-center gap-2 whitespace-nowrap"
+        >
+          <i data-lucide="upload-cloud" class="w-4 h-4"></i> Upload Assets
+        </button>
+        <button
+          onclick="switchView('dashboard')"
+          id="nav-dashboard"
+          class="nav-btn px-4 py-3 text-sm font-semibold text-slate-500 hover:text-purple-700 hover:bg-purple-50 border-b-2 border-transparent transition flex items-center gap-2 whitespace-nowrap"
+        >
+          <i data-lucide="layout-dashboard" class="w-4 h-4"></i>
+          Portfolio Dashboard
+        </button>
+        <button
+          onclick="switchView('catchment')"
+          id="nav-catchment"
+          class="nav-btn px-4 py-3 text-sm font-semibold text-slate-500 hover:text-purple-700 hover:bg-purple-50 border-b-2 border-transparent transition flex items-center gap-2 whitespace-nowrap"
+        >
+          <i data-lucide="radar" class="w-4 h-4"></i> Catchment Analysis
+        </button>
+        <button
+          onclick="switchView('construction')"
+          id="nav-construction"
+          class="nav-btn px-4 py-3 text-sm font-semibold text-purple-700 bg-white border-b-2 border-purple-700 transition flex items-center gap-2 whitespace-nowrap shadow-[0_-4px_6px_-6px_rgba(0,0,0,0.1)]"
+        >
+          <i data-lucide="history" class="w-4 h-4"></i> Construction Progress
+        </button>
+      </nav>
+    </div>
 
-					<!-- Drag & Drop Zone -->
-					<div
-						id="dropZone"
-						class="border-2 border-dashed border-purple-200 bg-purple-50/30 rounded-xl p-10 text-center hover:bg-purple-50 hover:border-purple-400 transition cursor-pointer relative"
-						ondragover="
-							event.preventDefault();
-							this.classList.add(
-								'border-purple-500',
-								'bg-purple-50',
-							);
-						"
-						ondragleave="
-							this.classList.remove(
-								'border-purple-500',
-								'bg-purple-50',
-							)
-						"
-						ondrop="handleFileDrop(event)"
-					>
-						<input
-							type="file"
-							id="fileInput"
-							accept=".csv,.kml,.kmz"
-							class="hidden"
-							onchange="handleFileSelect(event)"
-						/>
-						<div
-							class="w-14 h-14 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center mx-auto mb-3"
-						>
-							<i data-lucide="cloud-upload" class="w-7 h-7"></i>
-						</div>
-						<h3 class="text-base font-bold text-slate-900">
-							Drop your file here
-						</h3>
-						<p class="text-xs text-slate-500 mt-1 mb-4">
-							Supports
-							<span class="font-semibold text-purple-700"
-								>CSV</span
-							>,
-							<span class="font-semibold text-purple-700"
-								>KML</span
-							>,
-							<span class="font-semibold text-purple-700"
-								>KMZ</span
-							>
-							boundary files
-						</p>
-						<button
-							onclick="
-								document.getElementById('fileInput').click()
-							"
-							class="bg-purple-700 hover:bg-purple-800 text-white font-medium text-sm px-6 py-2 rounded-lg shadow-sm transition"
-						>
-							Browse Files
-						</button>
-						<p
-							id="uploadFileName"
-							class="text-xs text-purple-700 font-semibold mt-3 hidden"
-						></p>
-					</div>
+    <!-- DASHBOARD SCROLL CONTAINER -->
+    <main class="flex-1 overflow-y-auto p-8 bg-slate-50/50 relative">
+      <!-- ================= VIEW 1: UPLOAD ================= -->
+      <div
+        id="view-upload"
+        class="view-section hidden max-w-4xl mx-auto space-y-6"
+      >
+        <div
+          class="bg-white rounded-xl border border-slate-200 p-8 purple-glow space-y-7"
+        >
+          <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+            <i data-lucide="file-up" class="w-5 h-5 text-purple-700"></i>
+            Import Geospatial Asset Boundaries
+          </h2>
 
-					<!-- Site Details Form -->
-					<div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-						<div>
-							<label
-								class="block text-xs font-bold uppercase tracking-wider text-purple-900 mb-2"
-								>Site Name
-								<span
-									class="text-purple-400 font-normal normal-case"
-								></span>
-							</label>
-							<input
-								type="text"
-								id="uploadSiteName"
-								placeholder="e.g. Vengudi"
-								class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-purple-600"
-							/>
-						</div>
-						<div>
-							<label
-								class="block text-xs font-bold uppercase tracking-wider text-purple-900 mb-2 flex items-center gap-2"
-							>
-								Location / Place
-								<span
-									id="locDetectStatus"
-									class="hidden text-[10px] font-normal normal-case text-purple-500 flex items-center gap-1"
-								>
-									<svg
-										class="animate-spin w-3 h-3"
-										xmlns="http://www.w3.org/2000/svg"
-										fill="none"
-										viewBox="0 0 24 24"
-									>
-										<circle
-											class="opacity-25"
-											cx="12"
-											cy="12"
-											r="10"
-											stroke="currentColor"
-											stroke-width="4"
-										></circle>
-										<path
-											class="opacity-75"
-											fill="currentColor"
-											d="M4 12a8 8 0 018-8v8z"
-										></path>
-									</svg>
-									Detecting...
-								</span>
-								<span
-									id="locDetectDone"
-									class="hidden text-[10px] font-normal normal-case text-green-600"
-								></span>
-							</label>
-							<input
-								type="text"
-								id="uploadLocation"
-								placeholder="..."
-								class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-600"
-							/>
-						</div>
-						<div>
-							<label
-								class="block text-xs font-bold uppercase tracking-wider text-purple-900 mb-2"
-								>Asset Type</label
-							>
-							<select
-								id="uploadAssetType"
-								class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-purple-600"
-							>
-								<option value="own">Own Site</option>
-								<option value="comp">Competitor Site</option>
-							</select>
-						</div>
-						<div>
-							<label
-								class="block text-xs font-bold uppercase tracking-wider text-purple-900 mb-2"
-								>Description
-								<span
-									class="text-slate-400 font-normal normal-case"
-									>(optional)</span
-								></label
-							>
-							<input
-								type="text"
-								id="uploadDesc"
-								placeholder="e.g. Late Surge Framework"
-								class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-600"
-							/>
-						</div>
-					</div>
+          <!-- Drag & Drop Zone -->
+          <div
+            id="dropZone"
+            class="border-2 border-dashed border-purple-200 bg-purple-50/30 rounded-xl p-10 text-center hover:bg-purple-50 hover:border-purple-400 transition cursor-pointer relative"
+            ondragover="
+              event.preventDefault();
+              this.classList.add('border-purple-500', 'bg-purple-50');
+            "
+            ondragleave="
+              this.classList.remove('border-purple-500', 'bg-purple-50')
+            "
+            ondrop="handleFileDrop(event)"
+          >
+            <input
+              type="file"
+              id="fileInput"
+              accept=".csv,.kml,.kmz"
+              class="hidden"
+              onchange="handleFileSelect(event)"
+            />
+            <div
+              class="w-14 h-14 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center mx-auto mb-3"
+            >
+              <i data-lucide="cloud-upload" class="w-7 h-7"></i>
+            </div>
+            <h3 class="text-base font-bold text-slate-900">
+              Drop your file here
+            </h3>
+            <p class="text-xs text-slate-500 mt-1 mb-4">
+              Supports
+              <span class="font-semibold text-purple-700">CSV</span>,
+              <span class="font-semibold text-purple-700">KML</span>,
+              <span class="font-semibold text-purple-700">KMZ</span>
+              boundary files
+            </p>
+            <button
+              onclick="document.getElementById('fileInput').click()"
+              class="bg-purple-700 hover:bg-purple-800 text-white font-medium text-sm px-6 py-2 rounded-lg shadow-sm transition"
+            >
+              Browse Files
+            </button>
+            <p
+              id="uploadFileName"
+              class="text-xs text-purple-700 font-semibold mt-3 hidden"
+            ></p>
+          </div>
 
-					<button
-						onclick="submitUpload()"
-						class="w-full bg-purple-700 hover:bg-purple-800 text-white font-bold text-sm py-3 rounded-xl transition shadow flex items-center justify-center gap-2"
-					>
-						<i data-lucide="plus-circle" class="w-4 h-4"></i> Add
-						Site to Portfolio
-					</button>
+          <!-- Site Details Form -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div>
+              <label
+                class="block text-xs font-bold uppercase tracking-wider text-purple-900 mb-2"
+                >Site Name
+                <span class="text-purple-400 font-normal normal-case"></span>
+              </label>
+              <input
+                type="text"
+                id="uploadSiteName"
+                placeholder="e.g. Vengudi"
+                class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-purple-600"
+              />
+            </div>
+            <div>
+              <label
+                class="block text-xs font-bold uppercase tracking-wider text-purple-900 mb-2 flex items-center gap-2"
+              >
+                Location / Place
+                <span
+                  id="locDetectStatus"
+                  class="hidden text-[10px] font-normal normal-case text-purple-500 flex items-center gap-1"
+                >
+                  <svg
+                    class="animate-spin w-3 h-3"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      class="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      stroke-width="4"
+                    ></circle>
+                    <path
+                      class="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8v8z"
+                    ></path>
+                  </svg>
+                  Detecting...
+                </span>
+                <span
+                  id="locDetectDone"
+                  class="hidden text-[10px] font-normal normal-case text-green-600"
+                ></span>
+              </label>
+              <input
+                type="text"
+                id="uploadLocation"
+                placeholder="..."
+                class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-600"
+              />
+            </div>
+            <div>
+              <label
+                class="block text-xs font-bold uppercase tracking-wider text-purple-900 mb-2"
+                >Asset Type</label
+              >
+              <select
+                id="uploadAssetType"
+                class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-purple-600"
+              >
+                <option value="own">Own Site</option>
+                <option value="comp">Competitor Site</option>
+              </select>
+            </div>
+            <div>
+              <label
+                class="block text-xs font-bold uppercase tracking-wider text-purple-900 mb-2"
+                >Description
+                <span class="text-slate-400 font-normal normal-case"
+                  >(optional)</span
+                ></label
+              >
+              <input
+                type="text"
+                id="uploadDesc"
+                placeholder="e.g. Late Surge Framework"
+                class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-600"
+              />
+            </div>
+          </div>
 
-					<!-- Upload Success Toast -->
-					<div
-						id="uploadToast"
-						class="hidden bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-3 text-sm text-green-800"
-					>
-						<i
-							data-lucide="check-circle-2"
-							class="w-5 h-5 text-green-500 shrink-0"
-						></i>
-						<span id="uploadToastMsg"
-							>Site added successfully!</span
-						>
-					</div>
-				</div>
-			</div>
+          <button
+            onclick="submitUpload()"
+            class="w-full bg-purple-700 hover:bg-purple-800 text-white font-bold text-sm py-3 rounded-xl transition shadow flex items-center justify-center gap-2"
+          >
+            <i data-lucide="plus-circle" class="w-4 h-4"></i> Add Site to
+            Portfolio
+          </button>
 
-			<!-- ================= VIEW 2: DASHBOARD ================= -->
-			<div id="view-dashboard" class="view-section hidden space-y-6">
-				<div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
-					<div
-						class="bg-white rounded-xl border border-slate-200 p-5 purple-glow"
-					>
-						<p
-							class="text-xs text-slate-400 font-bold uppercase tracking-wider"
-						>
-							Total Tracked Sites
-						</p>
-						<p
-							class="text-3xl font-black text-purple-900 mt-1"
-							id="statTotal"
-						>
-							5
-						</p>
-					</div>
-					<div
-						class="bg-white rounded-xl border border-slate-200 p-5 purple-glow"
-					>
-						<p
-							class="text-xs text-slate-400 font-bold uppercase tracking-wider"
-						>
-							Own Sites
-						</p>
-						<p
-							class="text-3xl font-black text-slate-700 mt-1"
-							id="statOwn"
-						>
-							1
-						</p>
-					</div>
-					<div
-						class="bg-white rounded-xl border border-slate-200 p-5 purple-glow"
-					>
-						<p
-							class="text-xs text-slate-400 font-bold uppercase tracking-wider"
-						>
-							Competitor Sites
-						</p>
-						<p
-							class="text-3xl font-black text-slate-700 mt-1"
-							id="statComp"
-						>
-							4
-						</p>
-					</div>
-					<div
-						class="bg-white rounded-xl border border-slate-200 p-5 purple-glow md:col-span-2"
-					>
-						<p
-							class="text-xs text-slate-400 font-bold uppercase tracking-wider"
-						>
-							Last Data Sync
-						</p>
-						<p
-							class="text-lg font-bold text-slate-800 mt-1 flex items-center gap-2"
-						>
-							<i
-								data-lucide="check-circle"
-								class="w-4 h-4 text-green-500"
-							></i>
-							Period 10 (Latest EE Run)
-						</p>
-					</div>
-				</div>
+          <!-- Upload Success Toast -->
+          <div
+            id="uploadToast"
+            class="hidden bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-3 text-sm text-green-800"
+          >
+            <i
+              data-lucide="check-circle-2"
+              class="w-5 h-5 text-green-500 shrink-0"
+            ></i>
+            <span id="uploadToastMsg">Site added successfully!</span>
+          </div>
+        </div>
+      </div>
 
-				<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-					<!-- Portfolio Map -->
-					<div
-						class="lg:col-span-2 bg-white rounded-xl border border-slate-200 purple-glow overflow-hidden"
-						style="min-height: 380px"
-					>
-						<div
-							class="px-5 pt-4 pb-2 flex items-center justify-between border-b border-slate-100"
-						>
-							<h3
-								class="text-xs font-bold text-purple-950 uppercase tracking-wider flex items-center gap-1.5"
-							>
-								<i data-lucide="map" class="w-4 h-4"></i>
-								Portfolio Site Map
-							</h3>
-							<div
-								class="flex items-center gap-3 text-[10px] font-semibold text-slate-500"
-							>
-								<span class="flex items-center gap-1"
-									><span
-										class="inline-block w-3 h-3 rounded-full bg-purple-600"
-									></span>
-									Own Site</span
-								>
-								<span class="flex items-center gap-1"
-									><span
-										class="inline-block w-3 h-3 rounded-full bg-orange-400"
-									></span>
-									Competitor</span
-								>
-							</div>
-						</div>
-						<div
-							id="portfolioMap"
-							style="height: 340px; width: 100%"
-						></div>
-					</div>
-					<!-- Site List -->
-					<div
-						class="bg-white rounded-xl border border-slate-200 purple-glow p-5"
-					>
-						<h3
-							class="text-xs font-bold text-purple-950 uppercase tracking-wider mb-3 flex items-center gap-1.5"
-						>
-							<i data-lucide="list" class="w-4 h-4"></i> Sites
-							Overview
-						</h3>
-						<div class="space-y-2" id="portfolio-site-list"></div>
-					</div>
-				</div>
-				<div
-					class="flex items-center justify-between mb-4 border-b border-slate-200 pb-2"
-				>
-					<h3 class="text-sm font-bold text-slate-900">
-						Active Portfolio Details
-					</h3>
-					<div class="flex gap-2">
-						<button
-							onclick="exportPortfolio()"
-							class="bg-white border border-slate-200 text-slate-600 px-3 py-1.5 rounded text-xs font-semibold hover:bg-slate-50 flex items-center gap-1"
-						>
-							<i data-lucide="download" class="w-3.5 h-3.5"></i>
-							Export Backup
-						</button>
-						<label
-							class="bg-white border border-slate-200 text-slate-600 px-3 py-1.5 rounded text-xs font-semibold hover:bg-slate-50 cursor-pointer flex items-center gap-1"
-						>
-							<i data-lucide="upload" class="w-3.5 h-3.5"></i>
-							Import Backup
-							<input
-								type="file"
-								class="hidden"
-								accept=".json"
-								onchange="importPortfolio(event)"
-							/>
-						</label>
-					</div>
-				</div>
-				<div
-					class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
-					id="dashboard-cards-container"
-				>
-					<!-- Cards injected via JS -->
-				</div>
-			</div>
+      <!-- ================= VIEW 2: DASHBOARD ================= -->
+      <div id="view-dashboard" class="view-section hidden space-y-6">
+        <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
+          <div
+            class="bg-white rounded-xl border border-slate-200 p-5 purple-glow"
+          >
+            <p
+              class="text-xs text-slate-400 font-bold uppercase tracking-wider"
+            >
+              Total Tracked Sites
+            </p>
+            <p class="text-3xl font-black text-purple-900 mt-1" id="statTotal">
+              5
+            </p>
+          </div>
+          <div
+            class="bg-white rounded-xl border border-slate-200 p-5 purple-glow"
+          >
+            <p
+              class="text-xs text-slate-400 font-bold uppercase tracking-wider"
+            >
+              Own Sites
+            </p>
+            <p class="text-3xl font-black text-slate-700 mt-1" id="statOwn">
+              1
+            </p>
+          </div>
+          <div
+            class="bg-white rounded-xl border border-slate-200 p-5 purple-glow"
+          >
+            <p
+              class="text-xs text-slate-400 font-bold uppercase tracking-wider"
+            >
+              Competitor Sites
+            </p>
+            <p class="text-3xl font-black text-slate-700 mt-1" id="statComp">
+              4
+            </p>
+          </div>
+          <div
+            class="bg-white rounded-xl border border-slate-200 p-5 purple-glow md:col-span-2"
+          >
+            <p
+              class="text-xs text-slate-400 font-bold uppercase tracking-wider"
+            >
+              Last Data Sync
+            </p>
+            <p
+              class="text-lg font-bold text-slate-800 mt-1 flex items-center gap-2"
+            >
+              <i data-lucide="check-circle" class="w-4 h-4 text-green-500"></i>
+              Period 10 (Latest EE Run)
+            </p>
+          </div>
+        </div>
 
-			<!-- ================= VIEW 3: CATCHMENT ================= -->
-			<div id="view-catchment" class="view-section hidden space-y-6">
-				<!-- Catchment Config -->
-				<div
-					class="bg-white rounded-xl border border-slate-200 p-6 purple-glow grid grid-cols-1 md:grid-cols-3 gap-6 items-end"
-				>
-					<div>
-						<label
-							class="block text-xs font-bold uppercase tracking-wider text-purple-900 mb-2"
-							>Select Target Site</label
-						>
-						<select
-							id="catchmentAssetSelector"
-							class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-purple-600"
-						>
-							<option value="alpha" data-type="own">
-								Alpha Hub (Own Site)
-							</option>
-						</select>
-					</div>
-					<div>
-						<label
-							class="block text-xs font-bold uppercase tracking-wider text-purple-900 mb-2"
-							>Scan Buffer Radius</label
-						>
-						<select
-							id="catchmentBuffer"
-							class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-600"
-						>
-							<option value="5">5 km</option>
-							<option value="10" selected>10 km</option>
-							<option value="15">15 km</option>
-							<option value="20">20 km</option>
-							<option value="30">30 km</option>
-							<option value="50">50 km</option>
-						</select>
-					</div>
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+          <!-- Portfolio Map -->
+          <div
+            class="lg:col-span-2 bg-white rounded-xl border border-slate-200 purple-glow overflow-hidden"
+            style="min-height: 380px"
+          >
+            <div
+              class="px-5 pt-4 pb-2 flex items-center justify-between border-b border-slate-100"
+            >
+              <h3
+                class="text-xs font-bold text-purple-950 uppercase tracking-wider flex items-center gap-1.5"
+              >
+                <i data-lucide="map" class="w-4 h-4"></i>
+                Portfolio Site Map
+              </h3>
+              <div
+                class="flex items-center gap-3 text-[10px] font-semibold text-slate-500"
+              >
+                <span class="flex items-center gap-1"
+                  ><span
+                    class="inline-block w-3 h-3 rounded-full bg-purple-600"
+                  ></span>
+                  Own Site</span
+                >
+                <span class="flex items-center gap-1"
+                  ><span
+                    class="inline-block w-3 h-3 rounded-full bg-orange-400"
+                  ></span>
+                  Competitor</span
+                >
+              </div>
+            </div>
+            <div id="portfolioMap" style="height: 340px; width: 100%"></div>
+          </div>
+          <!-- Site List -->
+          <div
+            class="bg-white rounded-xl border border-slate-200 purple-glow p-5"
+          >
+            <h3
+              class="text-xs font-bold text-purple-950 uppercase tracking-wider mb-3 flex items-center gap-1.5"
+            >
+              <i data-lucide="list" class="w-4 h-4"></i> Sites Overview
+            </h3>
+            <div class="space-y-2" id="portfolio-site-list"></div>
+          </div>
+        </div>
+        <div
+          class="flex items-center justify-between mb-4 border-b border-slate-200 pb-2"
+        >
+          <h3 class="text-sm font-bold text-slate-900">
+            Active Portfolio Details
+          </h3>
+          <div class="flex gap-2">
+            <button
+              onclick="exportPortfolio()"
+              class="bg-white border border-slate-200 text-slate-600 px-3 py-1.5 rounded text-xs font-semibold hover:bg-slate-50 flex items-center gap-1"
+            >
+              <i data-lucide="download" class="w-3.5 h-3.5"></i>
+              Export Backup
+            </button>
+            <label
+              class="bg-white border border-slate-200 text-slate-600 px-3 py-1.5 rounded text-xs font-semibold hover:bg-slate-50 cursor-pointer flex items-center gap-1"
+            >
+              <i data-lucide="upload" class="w-3.5 h-3.5"></i>
+              Import Backup
+              <input
+                type="file"
+                class="hidden"
+                accept=".json"
+                onchange="importPortfolio(event)"
+              />
+            </label>
+          </div>
+        </div>
+        <div
+          class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+          id="dashboard-cards-container"
+        >
+          <!-- Cards injected via JS -->
+        </div>
+      </div>
 
-					<button
-						onclick="runCatchmentAnalysis()"
-						class="bg-purple-700 hover:bg-purple-800 text-white font-medium text-sm px-4 py-2.5 rounded-lg transition flex items-center justify-center gap-2"
-					>
-						<i data-lucide="play" class="w-4 h-4"></i> Run Analysis
-					</button>
-				</div>
+      <!-- ================= VIEW 3: CATCHMENT ================= -->
+      <div id="view-catchment" class="view-section hidden space-y-6">
+        <!-- Catchment Config -->
+        <div
+          class="bg-white rounded-xl border border-slate-200 p-6 purple-glow grid grid-cols-1 md:grid-cols-3 gap-6 items-end"
+        >
+          <div>
+            <label
+              class="block text-xs font-bold uppercase tracking-wider text-purple-900 mb-2"
+              >Select Target Site</label
+            >
+            <select
+              id="catchmentAssetSelector"
+              class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-purple-600"
+            >
+              <option value="alpha" data-type="own">
+                Alpha Hub (Own Site)
+              </option>
+            </select>
+          </div>
+          <div>
+            <label
+              class="block text-xs font-bold uppercase tracking-wider text-purple-900 mb-2"
+              >Scan Buffer Radius</label
+            >
+            <select
+              id="catchmentBuffer"
+              class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-600"
+            >
+              <option value="5">5 km</option>
+              <option value="10" selected>10 km</option>
+              <option value="15">15 km</option>
+              <option value="20">20 km</option>
+              <option value="30">30 km</option>
+              <option value="50">50 km</option>
+            </select>
+          </div>
 
-				<!-- Backend Layer Loader -->
-				<div
-					class="bg-white rounded-xl border border-slate-200 p-6 purple-glow space-y-3"
-				>
-					<div
-						class="flex items-center justify-between flex-wrap gap-2"
-					>
-						<h3
-							class="text-xs font-bold text-purple-950 uppercase tracking-wider flex items-center gap-1.5"
-						>
-							<i data-lucide="server" class="w-4 h-4"></i>
-							Load Encumbrance Layers (Backend)
-						</h3>
-						<div class="flex gap-2">
-							<button
-								onclick="fetchLayersFromBackend()"
-								class="bg-purple-700 hover:bg-purple-800 text-white text-xs font-semibold px-3 py-2 rounded-lg flex items-center gap-1.5 transition"
-							>
-								<i data-lucide="download-cloud" class="w-3.5 h-3.5"></i>
-								Fetch from Server
-							</button>
-						</div>
-					</div>
-					<p class="text-[11px] text-slate-500">
-						Make sure the backend server (app.py) is running on http://127.0.0.1:5000. 
-						This will pull all required GeoJSON layers directly without manual upload.
-					</p>
-					<div
-						id="layerFileStatus"
-						class="flex flex-wrap gap-2 text-[11px]"
-					></div>
-				</div>
+          <button
+            onclick="runCatchmentAnalysis()"
+            class="bg-purple-700 hover:bg-purple-800 text-white font-medium text-sm px-4 py-2.5 rounded-lg transition flex items-center justify-center gap-2"
+          >
+            <i data-lucide="play" class="w-4 h-4"></i> Run Analysis
+          </button>
+        </div>
 
-				<!-- Catchment Active View -->
-				<div
-					id="catchmentActiveContainer"
-					class="hidden bg-white rounded-xl border border-slate-200 p-6 purple-glow space-y-4"
-				>
-					<div
-						class="flex justify-between items-center border-b border-slate-100 pb-3"
-					>
-						<h2
-							class="text-base font-bold text-slate-900 flex items-center gap-2"
-						>
-							<i
-								data-lucide="radar"
-								class="w-4 h-4 text-purple-700"
-							></i>
-							Vector Query Map
-						</h2>
-						<span
-							class="text-[11px] font-bold text-purple-700 bg-purple-50 px-2.5 py-1 rounded-full border border-purple-100"
-							>DuckDB Core Online</span
-						>
-					</div>
-					<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-						<div
-							class="lg:col-span-2 bg-slate-50 rounded-lg border border-slate-200 relative min-h-[350px] overflow-hidden"
-						>
-							<div
-								id="catchmentMap"
-								class="absolute inset-0 z-0"
-							></div>
-							<div
-								id="catchmentMapOverlay"
-								class="absolute inset-0 z-10 bg-slate-50 flex flex-col justify-center items-center text-center transition-opacity duration-500"
-							>
-								<i
-									data-lucide="map-pin"
-									class="w-10 h-10 text-purple-600 mb-2 animate-bounce"
-								></i>
-								<p class="text-sm font-semibold text-slate-700">
-									Parquet Query Spatial Canvas
-								</p>
-								<p
-									id="catchmentCanvasText"
-									class="text-xs text-slate-400 mt-1 max-w-sm"
-								>
-									ST_DWithin processing via GCS Parquet files
-									for Alpha Hub.
-								</p>
-							</div>
-						</div>
-						<div class="space-y-4">
-							<div
-								class="bg-slate-50 rounded-lg p-4 border border-slate-200"
-							>
-								<h4
-									class="text-xs font-bold text-purple-950 uppercase tracking-wider mb-2 flex items-center gap-1.5"
-								>
-									<i
-										data-lucide="navigation"
-										class="w-3 h-3"
-									></i>
-									Intersections
-								</h4>
-								<p class="text-xs text-slate-600">
-									Inside Village:
-									<span class="text-slate-900 font-bold"
-										>Hinjawadi Sector 3</span
-									>
-								</p>
-							</div>
-							<div
-								class="bg-slate-50 rounded-lg p-4 border border-slate-200"
-							>
-								<h4
-									class="text-xs font-bold text-purple-950 uppercase tracking-wider mb-2 flex items-center gap-1.5"
-								>
-									<i
-										data-lucide="alert-triangle"
-										class="w-3 h-3"
-									></i>
-									Encumbrances
-								</h4>
-								<div class="space-y-2 text-xs">
-									<div
-										class="flex justify-between bg-white p-2 rounded border border-slate-100"
-									>
-										<span>Shiv Mandir</span
-										><span class="font-bold text-purple-700"
-											>0.8 km</span
-										>
-									</div>
-									<div
-										class="flex justify-between bg-white p-2 rounded border border-slate-100"
-									>
-										<span>Grand Galleria</span
-										><span class="font-bold text-purple-700"
-											>2.4 km</span
-										>
-									</div>
-								</div>
-							</div>
-							<div
-								class="bg-slate-50 rounded-lg p-4 border border-slate-200"
-							>
-								<h4
-									class="text-xs font-bold text-purple-950 uppercase tracking-wider mb-2 flex items-center gap-1.5"
-								>
-									<i
-										data-lucide="layers"
-										class="w-3 h-3"
-									></i>
-									Layer Visibility
-								</h4>
-								<div id="catchmentLayerToggles" class="space-y-2 text-xs">
-									<!-- Dynamically populated by JS -->
-								</div>
-							</div>
-						</div>
-					</div>
-				</div>
+        <!-- Backend Layer Loader -->
+        <div
+          class="bg-white rounded-xl border border-slate-200 p-6 purple-glow space-y-3"
+        >
+          <div class="flex items-center justify-between flex-wrap gap-2">
+            <h3
+              class="text-xs font-bold text-purple-950 uppercase tracking-wider flex items-center gap-1.5"
+            >
+              <i data-lucide="server" class="w-4 h-4"></i>
+              Load Encumbrance Layers (Backend)
+            </h3>
+            <div class="flex gap-2">
+              <button
+                onclick="fetchLayersFromBackend()"
+                class="bg-purple-700 hover:bg-purple-800 text-white text-xs font-semibold px-3 py-2 rounded-lg flex items-center gap-1.5 transition"
+              >
+                <i data-lucide="download-cloud" class="w-3.5 h-3.5"></i>
+                Fetch from Server
+              </button>
+            </div>
+          </div>
+          <p class="text-[11px] text-slate-500">
+            Make sure the backend server (app.py) is running on
+            http://127.0.0.1:5000. This will pull all required GeoJSON layers
+            directly without manual upload.
+          </p>
+          <div
+            id="layerFileStatus"
+            class="flex flex-wrap gap-2 text-[11px]"
+          ></div>
+        </div>
 
-				<!-- Catchment Locked View Removed -->
-			</div>
+        <!-- Catchment Active View -->
+        <div
+          id="catchmentActiveContainer"
+          class="hidden bg-white rounded-xl border border-slate-200 p-6 purple-glow space-y-4"
+        >
+          <div
+            class="flex justify-between items-center border-b border-slate-100 pb-3"
+          >
+            <h2
+              class="text-base font-bold text-slate-900 flex items-center gap-2"
+            >
+              <i data-lucide="radar" class="w-4 h-4 text-purple-700"></i>
+              Vector Query Map
+            </h2>
+            <span
+              class="text-[11px] font-bold text-purple-700 bg-purple-50 px-2.5 py-1 rounded-full border border-purple-100"
+              >DuckDB Core Online</span
+            >
+          </div>
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div
+              class="lg:col-span-2 bg-slate-50 rounded-lg border border-slate-200 relative min-h-[350px] overflow-hidden"
+            >
+              <div id="catchmentMap" class="absolute inset-0 z-0"></div>
+              <div
+                id="catchmentMapOverlay"
+                class="absolute inset-0 z-10 bg-slate-50 flex flex-col justify-center items-center text-center transition-opacity duration-500"
+              >
+                <i
+                  data-lucide="map-pin"
+                  class="w-10 h-10 text-purple-600 mb-2 animate-bounce"
+                ></i>
+                <p class="text-sm font-semibold text-slate-700">
+                  Parquet Query Spatial Canvas
+                </p>
+                <p
+                  id="catchmentCanvasText"
+                  class="text-xs text-slate-400 mt-1 max-w-sm"
+                >
+                  ST_DWithin processing via GCS Parquet files for Alpha Hub.
+                </p>
+              </div>
+            </div>
+            <div class="space-y-4">
+              <div class="bg-slate-50 rounded-lg p-4 border border-slate-200">
+                <h4
+                  class="text-xs font-bold text-purple-950 uppercase tracking-wider mb-2 flex items-center gap-1.5"
+                >
+                  <i data-lucide="navigation" class="w-3 h-3"></i>
+                  Intersections
+                </h4>
+                <p class="text-xs text-slate-600">
+                  Inside Village:
+                  <span class="text-slate-900 font-bold"
+                    >Hinjawadi Sector 3</span
+                  >
+                </p>
+              </div>
+              <div class="bg-slate-50 rounded-lg p-4 border border-slate-200">
+                <h4
+                  class="text-xs font-bold text-purple-950 uppercase tracking-wider mb-2 flex items-center gap-1.5"
+                >
+                  <i data-lucide="alert-triangle" class="w-3 h-3"></i>
+                  Encumbrances
+                </h4>
+                <div class="space-y-2 text-xs">
+                  <div
+                    class="flex justify-between bg-white p-2 rounded border border-slate-100"
+                  >
+                    <span>Shiv Mandir</span
+                    ><span class="font-bold text-purple-700">0.8 km</span>
+                  </div>
+                  <div
+                    class="flex justify-between bg-white p-2 rounded border border-slate-100"
+                  >
+                    <span>Grand Galleria</span
+                    ><span class="font-bold text-purple-700">2.4 km</span>
+                  </div>
+                </div>
+              </div>
+              <div class="bg-slate-50 rounded-lg p-4 border border-slate-200">
+                <h4
+                  class="text-xs font-bold text-purple-950 uppercase tracking-wider mb-2 flex items-center gap-1.5"
+                >
+                  <i data-lucide="layers" class="w-3 h-3"></i>
+                  Layer Visibility
+                </h4>
+                <div id="catchmentLayerToggles" class="space-y-2 text-xs">
+                  <!-- Dynamically populated by JS -->
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
 
-			<!-- ================= VIEW 4: CONSTRUCTION PROGRESS ================= -->
-			<div id="view-construction" class="view-section space-y-6">
-				<!-- CONFIGURATION PANEL -->
-				<div
-					class="bg-white rounded-xl border border-slate-200 p-6 purple-glow space-y-5"
-				>
-					<div
-						class="grid grid-cols-1 md:grid-cols-12 gap-6 items-end"
-					>
-						<!-- Target Selection -->
-						<div
-							class="md:col-span-5 space-y-4 border-r border-slate-100 pr-6"
-						>
-							<div>
-								<label
-									class="block text-xs font-bold uppercase tracking-wider text-purple-900 mb-2"
-									>Base Target Analysis (Default)</label
-								>
-								<select
-									id="primaryTarget"
-									class="w-full bg-purple-50 text-purple-900 border border-purple-200 rounded-lg px-3 py-2 text-sm font-semibold focus:outline-none"
-								>
-									<option value="sigma">
-										Vengudi (Own Site)
-									</option>
-								</select>
-							</div>
+        <!-- Catchment Locked View Removed -->
+      </div>
 
-							<div class="relative">
-								<label
-									class="block text-xs font-bold uppercase tracking-wider text-purple-900 mb-2"
-									>Compare with Competitors (Optional)</label
-								>
-								<button
-									onclick="toggleDropdown('compDropdown')"
-									class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm font-medium text-left flex justify-between items-center hover:bg-slate-100 transition"
-								>
-									<span id="compDropdownText"
-										>Select Competitor Sites...</span
-									>
-									<i
-										data-lucide="chevron-down"
-										class="w-4 h-4 text-slate-400"
-									></i>
-								</button>
-								<!-- Custom Multi-select Dropdown -->
-								<div
-									id="compDropdown"
-									class="dropdown-content absolute w-full bg-white border border-slate-200 rounded-lg shadow-lg mt-1 z-50 p-2 space-y-1"
-								>
-									<label
-										class="flex items-center gap-3 px-3 py-2 hover:bg-slate-50 rounded cursor-pointer transition"
-									>
-										<input
-											type="checkbox"
-											value="alpha"
-											class="comp-check accent-purple-600 w-4 h-4"
-										/>
-										<span
-											class="text-sm font-medium text-slate-700"
-											>AlphaOne (SITE01)</span
-										>
-									</label>
-									<label
-										class="flex items-center gap-3 px-3 py-2 hover:bg-slate-50 rounded cursor-pointer transition"
-									>
-										<input
-											type="checkbox"
-											value="beta"
-											class="comp-check accent-purple-600 w-4 h-4"
-										/>
-										<span
-											class="text-sm font-medium text-slate-700"
-											>Ascendes (SITE02)</span
-										>
-									</label>
-									<label
-										class="flex items-center gap-3 px-3 py-2 hover:bg-slate-50 rounded cursor-pointer transition"
-									>
-										<input
-											type="checkbox"
-											value="gamma"
-											class="comp-check accent-purple-600 w-4 h-4"
-										/>
-										<span
-											class="text-sm font-medium text-slate-700"
-											>ESR (SITE03)</span
-										>
-									</label>
-									<label
-										class="flex items-center gap-3 px-3 py-2 hover:bg-slate-50 rounded cursor-pointer transition"
-									>
-										<input
-											type="checkbox"
-											value="delta"
-											class="comp-check accent-purple-600 w-4 h-4"
-										/>
-										<span
-											class="text-sm font-medium text-slate-700"
-											>EndoSpace (SITE04)</span
-										>
-									</label>
-								</div>
-							</div>
-						</div>
+      <!-- ================= VIEW 4: CONSTRUCTION PROGRESS ================= -->
+      <div id="view-construction" class="view-section space-y-6">
+        <!-- CONFIGURATION PANEL -->
+        <div
+          class="bg-white rounded-xl border border-slate-200 p-6 purple-glow space-y-5"
+        >
+          <!-- Target Selection (Horizontal) -->
+          <div
+            class="grid grid-cols-1 md:grid-cols-2 gap-6 border-b border-slate-100 pb-5"
+          >
+            <div>
+              <label
+                class="block text-xs font-bold uppercase tracking-wider text-purple-900 mb-2"
+                >Base Target Analysis (Default)</label
+              >
+              <select
+                id="primaryTarget"
+                class="w-full bg-purple-50 text-purple-900 border border-purple-200 rounded-lg px-3 py-2 text-sm font-semibold focus:outline-none"
+              >
+                <option value="sigma">Vengudi (Own Site)</option>
+              </select>
+            </div>
+            <div class="relative">
+              <label
+                class="block text-xs font-bold uppercase tracking-wider text-purple-900 mb-2"
+                >Compare with Competitors (Optional)</label
+              >
+              <button
+                onclick="toggleDropdown('compDropdown')"
+                class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm font-medium text-left flex justify-between items-center hover:bg-slate-100 transition"
+              >
+                <span id="compDropdownText">Select Competitor Sites...</span>
+                <i
+                  data-lucide="chevron-down"
+                  class="w-4 h-4 text-slate-400"
+                ></i>
+              </button>
+              <!-- Custom Multi-select Dropdown -->
+              <div
+                id="compDropdown"
+                class="dropdown-content absolute w-full bg-white border border-slate-200 rounded-lg shadow-lg mt-1 z-50 p-2 space-y-1"
+              >
+                <label
+                  class="flex items-center gap-3 px-3 py-2 hover:bg-slate-50 rounded cursor-pointer transition"
+                >
+                  <input
+                    type="checkbox"
+                    value="alpha"
+                    class="comp-check accent-purple-600 w-4 h-4"
+                  />
+                  <span class="text-sm font-medium text-slate-700"
+                    >AlphaOne (SITE01)</span
+                  >
+                </label>
+                <label
+                  class="flex items-center gap-3 px-3 py-2 hover:bg-slate-50 rounded cursor-pointer transition"
+                >
+                  <input
+                    type="checkbox"
+                    value="beta"
+                    class="comp-check accent-purple-600 w-4 h-4"
+                  />
+                  <span class="text-sm font-medium text-slate-700"
+                    >Ascendes (SITE02)</span
+                  >
+                </label>
+                <label
+                  class="flex items-center gap-3 px-3 py-2 hover:bg-slate-50 rounded cursor-pointer transition"
+                >
+                  <input
+                    type="checkbox"
+                    value="gamma"
+                    class="comp-check accent-purple-600 w-4 h-4"
+                  />
+                  <span class="text-sm font-medium text-slate-700"
+                    >ESR (SITE03)</span
+                  >
+                </label>
+                <label
+                  class="flex items-center gap-3 px-3 py-2 hover:bg-slate-50 rounded cursor-pointer transition"
+                >
+                  <input
+                    type="checkbox"
+                    value="delta"
+                    class="comp-check accent-purple-600 w-4 h-4"
+                  />
+                  <span class="text-sm font-medium text-slate-700"
+                    >EndoSpace (SITE04)</span
+                  >
+                </label>
+              </div>
+            </div>
+          </div>
 
-						<!-- Temporal Selection (Static Data) -->
-						<div
-							class="md:col-span-5 space-y-4 border-r border-slate-100 pr-6"
-						>
-							<label
-								class="block text-xs font-bold uppercase tracking-wider text-purple-900"
-								>Period Selection Range</label
-							>
-							<div class="flex gap-4">
-								<div class="flex-1">
-									<label
-										class="block text-[10px] font-semibold uppercase text-slate-500 mb-1"
-										>From Date</label
-									>
-									<input
-										type="date"
-										id="dateFrom"
-										disabled
-										class="w-full bg-slate-100 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-400 cursor-not-allowed focus:outline-none"
-									/>
-								</div>
-								<div class="flex-1">
-									<label
-										class="block text-[10px] font-semibold uppercase text-slate-500 mb-1"
-										>To Date</label
-									>
-									<input
-										type="date"
-										id="dateTo"
-										disabled
-										class="w-full bg-slate-100 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-400 cursor-not-allowed focus:outline-none"
-									/>
-								</div>
-							</div>
-							<div class="flex items-center gap-3">
-								<label
-									class="text-[10px] font-semibold uppercase text-slate-500 whitespace-nowrap"
-									>Time Interval (Months):</label
-								>
-								<input
-									type="number"
-									id="intervalMonths"
-									value="3"
-									min="1"
-									disabled
-									class="w-20 bg-slate-100 border border-slate-200 rounded-md px-2 py-1 text-sm text-slate-400 cursor-not-allowed focus:outline-none text-center"
-								/>
-							</div>
-						</div>
+          <!-- Temporal Selection & Action Button (Horizontal Below) -->
+          <div class="grid grid-cols-1 md:grid-cols-12 gap-6 items-end pt-1">
+            <div class="md:col-span-10 space-y-4">
+              <label
+                class="block text-xs font-bold uppercase tracking-wider text-purple-900"
+                >Period Selection Range (Static Data)</label
+              >
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div>
+                  <label
+                    class="block text-[10px] font-semibold uppercase text-slate-500 mb-1"
+                    >From Date</label
+                  >
+                  <input
+                    type="date"
+                    id="dateFrom"
+                    disabled
+                    class="w-full bg-slate-100 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-400 cursor-not-allowed focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label
+                    class="block text-[10px] font-semibold uppercase text-slate-500 mb-1"
+                    >To Date</label
+                  >
+                  <input
+                    type="date"
+                    id="dateTo"
+                    disabled
+                    class="w-full bg-slate-100 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-400 cursor-not-allowed focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label
+                    class="block text-[10px] font-semibold uppercase text-slate-500 mb-1"
+                    >Time Interval (Months):</label
+                  >
+                  <input
+                    type="number"
+                    id="intervalMonths"
+                    value="3"
+                    min="1"
+                    disabled
+                    class="w-full bg-slate-100 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-400 cursor-not-allowed focus:outline-none text-center"
+                  />
+                </div>
+              </div>
+            </div>
 
-						<!-- Action Button -->
-						<div class="md:col-span-2 pb-1">
-							<button
-								onclick="runConstructionAnalysis()"
-								class="w-full h-full min-h-[50px] bg-purple-700 hover:bg-purple-800 text-white font-bold text-sm px-4 py-3 rounded-lg transition shadow-md flex flex-col items-center justify-center gap-1"
-							>
-								<i data-lucide="activity" class="w-5 h-5"></i>
-								<span>Run Analysis</span>
-							</button>
-						</div>
-					</div>
-				</div>
+            <!-- Action Button -->
+            <div class="md:col-span-2">
+              <button
+                onclick="runConstructionAnalysis()"
+                class="w-full h-full min-h-[50px] bg-purple-700 hover:bg-purple-800 text-white font-bold text-sm px-4 py-3 rounded-lg transition shadow-md flex flex-col items-center justify-center gap-1"
+              >
+                <i data-lucide="activity" class="w-5 h-5"></i>
+                <span>Run Analysis</span>
+              </button>
+            </div>
+          </div>
+        </div>
 
-				<!-- ANALYSIS RESULTS GRID -->
-				<!-- Top Half: Imagery & Bar Chart -->
-				<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-					<!-- Left: Map Layer View -->
-					<div
-						class="bg-white border border-slate-200 rounded-xl p-5 flex flex-col purple-glow relative min-h-[400px]"
-					>
-						<div
-							class="flex justify-between items-center mb-4 shrink-0 flex-wrap gap-3"
-						>
-							<div>
-								<span
-									class="text-xs font-bold text-purple-950 uppercase tracking-wider block mb-1"
-									>Imagery Layer View</span
-								>
-								<!-- Site Selector specifically for the Map -->
-								<select
-									id="mapTargetSite"
-									onchange="updateMapText()"
-									class="bg-slate-50 border border-slate-200 rounded-md px-2 py-1 text-xs font-semibold text-slate-700 focus:outline-none"
-								>
-									<option value="alpha">
-										Alpha Hub (Own)
-									</option>
-								</select>
-							</div>
-							<div
-								class="bg-slate-100 p-0.5 rounded-lg border border-slate-200 flex"
-							>
-								<button
-									id="btnMapRGB"
-									onclick="setLayer('rgb')"
-									class="px-3 py-1.5 text-[11px] font-semibold rounded shadow-sm bg-white text-purple-900 transition"
-								>
-									RGB Layer
-								</button>
-								<button
-									id="btnMapClass"
-									onclick="setLayer('class')"
-									class="px-3 py-1.5 text-[11px] font-semibold rounded text-slate-500 hover:text-purple-900 transition"
-								>
-									Classification
-								</button>
-							</div>
-						</div>
+        <!-- ANALYSIS RESULTS GRID -->
+        <!-- Top Half: Imagery & Bar Chart -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <!-- Left: Map Layer View -->
+          <div
+            class="bg-white border border-slate-200 rounded-xl p-5 flex flex-col purple-glow relative min-h-[400px]"
+          >
+            <div
+              class="flex justify-between items-center mb-4 shrink-0 flex-wrap gap-3"
+            >
+              <div>
+                <span
+                  class="text-xs font-bold text-purple-950 uppercase tracking-wider block mb-1"
+                  >Imagery Layer View</span
+                >
+                <!-- Site Selector specifically for the Map -->
+                <select
+                  id="mapTargetSite"
+                  onchange="updateLayerInfo()"
+                  class="bg-slate-50 border border-slate-200 rounded-md px-2 py-1 text-xs font-semibold text-slate-700 focus:outline-none"
+                >
+                  <option value="alpha">Alpha Hub (Own)</option>
+                </select>
+              </div>
+              <div
+                class="bg-slate-100 p-0.5 rounded-lg border border-slate-200 flex"
+              >
+                <button
+                  id="btnMapRGB"
+                  onclick="setLayer('rgb')"
+                  class="px-3 py-1.5 text-[11px] font-semibold rounded shadow-sm bg-white text-purple-900 transition"
+                >
+                  RGB Layer
+                </button>
+                <button
+                  id="btnMapClass"
+                  onclick="setLayer('class')"
+                  class="px-3 py-1.5 text-[11px] font-semibold rounded text-slate-500 hover:text-purple-900 transition"
+                >
+                  Classification
+                </button>
+              </div>
+            </div>
 
-						<!-- Leaflet map renders real GEE tiles after analysis -->
-						<div
-							id="mapCanvas"
-							class="flex-1 rounded-lg border border-slate-200 relative overflow-hidden"
-							style="min-height: 320px"
-						>
-							<!-- Placeholder shown before analysis runs -->
-							<div
-								id="mapPlaceholder"
-								class="absolute inset-0 flex flex-col items-center justify-center bg-slate-200 z-10"
-							>
-								<i
-									data-lucide="satellite"
-									class="w-10 h-10 text-slate-500 mb-2"
-								></i>
-								<p
-									id="mapOverlayText"
-									class="text-sm font-semibold text-slate-700 bg-white/70 px-4 py-1 rounded-full"
-								>
-									Run Analysis to load Earth Engine tiles
-								</p>
-							</div>
-							<!-- Leaflet container -->
-							<div
-								id="leafletMap"
-								style="
-									width: 100%;
-									height: 100%;
-									min-height: 320px;
-								"
-							></div>
-						</div>
-					</div>
+            <!-- Leaflet map renders real GEE tiles after analysis -->
+            <div
+              id="mapCanvas"
+              class="flex-1 rounded-lg border border-slate-200 relative overflow-hidden"
+              style="min-height: 320px"
+            >
+              <!-- Placeholder shown before analysis runs -->
+              <div
+                id="mapPlaceholder"
+                class="absolute inset-0 flex flex-col items-center justify-center bg-slate-200 z-10"
+              >
+                <i
+                  data-lucide="satellite"
+                  class="w-10 h-10 text-slate-500 mb-2"
+                ></i>
+                <p
+                  id="mapOverlayText"
+                  class="text-sm font-semibold text-slate-700 bg-white/70 px-4 py-1 rounded-full"
+                >
+                  Run Analysis to load Earth Engine tiles
+                </p>
+              </div>
+              <!-- Leaflet container -->
+              <div
+                id="leafletMap"
+                style="width: 100%; height: 100%; min-height: 320px"
+              ></div>
+            </div>
+          </div>
 
-					<!-- Right: Bar Chart (Progress Statistics) -->
-					<div
-						class="bg-white border border-slate-200 rounded-xl p-5 purple-glow flex flex-col min-h-[400px]"
-					>
-						<div class="mb-4">
-							<h3
-								class="text-xs font-bold text-purple-950 uppercase tracking-wider flex items-center gap-1.5"
-							>
-								<i
-									data-lucide="bar-chart-3"
-									class="w-4 h-4"
-								></i>
-								Progress Statistics
-							</h3>
-							<p
-								class="text-[10px] text-slate-500 mt-1"
-								id="barChartSub"
-							>
-								Structural Balance Breakdown at End Period
-							</p>
-						</div>
+          <!-- Right: Bar Chart (Progress Statistics) -->
+          <div
+            class="bg-white border border-slate-200 rounded-xl p-5 purple-glow flex flex-col min-h-[400px]"
+          >
+            <div class="mb-4">
+              <h3
+                class="text-xs font-bold text-purple-950 uppercase tracking-wider flex items-center gap-1.5"
+              >
+                <i data-lucide="bar-chart-3" class="w-4 h-4"></i>
+                Progress Statistics
+              </h3>
+              <p class="text-[10px] text-slate-500 mt-1" id="barChartSub">
+                Structural Balance Breakdown at End Period
+              </p>
+            </div>
 
-						<!-- Stacked Bar Chart -->
-						<div
-							class="flex-1 relative w-full h-full min-h-[250px]"
-						>
-							<canvas id="barChartStatus"></canvas>
-						</div>
+            <!-- Stacked Bar Chart -->
+            <div class="flex-1 relative w-full h-full min-h-[250px]">
+              <canvas id="barChartStatus"></canvas>
+            </div>
 
-						<div
-							class="mt-4 pt-3 border-t border-slate-100 flex items-center justify-center gap-4 text-[10px] text-slate-600 font-medium"
-						>
-							<div class="flex items-center gap-1.5">
-								<div
-									class="w-2.5 h-2.5 rounded bg-[#5BAA68]"
-								></div>
-								Completed (CO)
-							</div>
-							<div class="flex items-center gap-1.5">
-								<div
-									class="w-2.5 h-2.5 rounded bg-[#E8903A]"
-								></div>
-								Under Const. (UC)
-							</div>
-							<div class="flex items-center gap-1.5">
-								<div
-									class="w-2.5 h-2.5 rounded bg-[#BFBDB5]"
-								></div>
-								Not Started (NS)
-							</div>
-						</div>
-					</div>
-				</div>
+            <div
+              class="mt-4 pt-3 border-t border-slate-100 flex items-center justify-center gap-4 text-[10px] text-slate-600 font-medium"
+            >
+              <div class="flex items-center gap-1.5">
+                <div class="w-2.5 h-2.5 rounded bg-[#5BAA68]"></div>
+                Completed (CO)
+              </div>
+              <div class="flex items-center gap-1.5">
+                <div class="w-2.5 h-2.5 rounded bg-[#E8903A]"></div>
+                Under Const. (UC)
+              </div>
+              <div class="flex items-center gap-1.5">
+                <div class="w-2.5 h-2.5 rounded bg-[#BFBDB5]"></div>
+                Not Started (NS)
+              </div>
+            </div>
+          </div>
+        </div>
 
-				<!-- Bottom Half: Line Chart -->
-				<div
-					class="bg-white border border-slate-200 rounded-xl p-5 purple-glow min-h-[320px] flex flex-col"
-				>
-					<div class="mb-4 flex justify-between items-end">
-						<div>
-							<h3
-								class="text-xs font-bold text-purple-950 uppercase tracking-wider flex items-center gap-1.5"
-							>
-								<i
-									data-lucide="trending-up"
-									class="w-4 h-4"
-								></i>
-								Completion Rate Trajectory (CO %)
-							</h3>
-							<p
-								class="text-[10px] text-slate-500 mt-1"
-								id="lineChartSub"
-							>
-								Tracking site completion phases over selected
-								timeline.
-							</p>
-						</div>
-					</div>
+        <!-- Bottom Half: Line Chart -->
+        <div
+          class="bg-white border border-slate-200 rounded-xl p-5 purple-glow min-h-[320px] flex flex-col"
+        >
+          <div class="mb-4 flex justify-between items-end">
+            <div>
+              <h3
+                class="text-xs font-bold text-purple-950 uppercase tracking-wider flex items-center gap-1.5"
+              >
+                <i data-lucide="trending-up" class="w-4 h-4"></i>
+                Completion Rate Trajectory (CO %)
+              </h3>
+              <p class="text-[10px] text-slate-500 mt-1" id="lineChartSub">
+                Tracking site completion phases over selected timeline. (Click a
+                point to change period)
+              </p>
+            </div>
+          </div>
 
-					<div class="flex-1 relative w-full h-full min-h-[240px]">
-						<canvas id="lineChartCompletion"></canvas>
-					</div>
-				</div>
-			</div>
-		</main>
+          <div class="flex-1 relative w-full h-full min-h-[240px]">
+            <canvas id="lineChartCompletion"></canvas>
+          </div>
+        </div>
+      </div>
+    </main>
 
-		<!-- CORE LOGIC & DATA -->
-		<script>
-			// --- MASTER DATASET ---
-			const siteData = {};
+    <!-- CORE LOGIC & DATA -->
+    <script>
+      // --- MASTER DATASET ---
+      const siteData = {};
 
-			// --- APP STATE ---
-			let appState = {
-				view: "construction",
-				layerMode: "rgb", // 'rgb' or 'class'
-				analysisTo: 9,
-				generatedPeriods: [],
-			};
+      // --- APP STATE ---
+      let appState = {
+        view: "construction",
+        layerMode: "rgb", // 'rgb' or 'class'
+        analysisTo: 9,
+        generatedPeriods: [],
+      };
 
-			// --- CHART INSTANCES ---
-			let lineChart = null;
-			let barChart = null;
+      // --- CHART INSTANCES ---
+      let lineChart = null;
+      let barChart = null;
+      let constructionMap = null;
+      let constructionLayer = null;
 
-			// --- PORTFOLIO SITE POLYGONS (from SitePolygon CSVs) ---
-			const sitePolygons = {};
+      // --- PORTFOLIO SITE POLYGONS (from SitePolygon CSVs) ---
+      const sitePolygons = {};
 
-			let portfolioMap = null;
+      let portfolioMap = null;
 
-			function initPortfolioMap() {
-				if (portfolioMap) return;
-				portfolioMap = L.map("portfolioMap", {
-					zoomControl: true,
-					scrollWheelZoom: true,
-				});
-				L.tileLayer(
-					"https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-					{
-						attribution: "© OpenStreetMap contributors",
-						maxZoom: 19,
-					},
-				).addTo(portfolioMap);
+      function initPortfolioMap() {
+        if (portfolioMap) return;
+        portfolioMap = L.map("portfolioMap", {
+          zoomControl: true,
+          scrollWheelZoom: true,
+        });
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          attribution: "© OpenStreetMap contributors",
+          maxZoom: 19,
+        }).addTo(portfolioMap);
 
-				const allLayers = [];
-				const listEl = document.getElementById("portfolio-site-list");
-				listEl.innerHTML = "";
+        const allLayers = [];
+        const listEl = document.getElementById("portfolio-site-list");
+        listEl.innerHTML = "";
 
-				Object.entries(sitePolygons).forEach(([sid, site]) => {
-					const geo = site.geo;
-					let coords;
-					if (geo.type === "MultiPolygon") {
-						coords = geo.coordinates.map((poly) =>
-							poly[0].map((c) => [c[1], c[0]]),
-						);
-					} else {
-						coords = geo.coordinates[0].map((c) => [c[1], c[0]]);
-					}
+        Object.entries(sitePolygons).forEach(([sid, site]) => {
+          const geo = site.geo;
+          let coords;
+          if (geo.type === "MultiPolygon") {
+            coords = geo.coordinates.map((poly) =>
+              poly[0].map((c) => [c[1], c[0]]),
+            );
+          } else {
+            coords = geo.coordinates[0].map((c) => [c[1], c[0]]);
+          }
 
-					const poly = L.polygon(coords, {
-						color: site.color,
-						fillColor: site.color,
-						fillOpacity: 0.25,
-						weight: 2,
-					});
-					poly._siteId = sid; // tag for delete lookup
+          const poly = L.polygon(coords, {
+            color: site.color,
+            fillColor: site.color,
+            fillOpacity: 0.25,
+            weight: 2,
+          });
+          poly._siteId = sid; // tag for delete lookup
 
-					const badge =
-						site.type === "own" ? "Own Asset" : "Competitor";
-					poly.bindPopup(
-						`<b>${site.name}</b><br><span style="font-size:11px;color:#64748b">${badge} · ${sid}</span>`,
-					);
+          const badge = site.type === "own" ? "Own Asset" : "Competitor";
+          poly.bindPopup(
+            `<b>${site.name}</b><br><span style="font-size:11px;color:#64748b">${badge} · ${sid}</span>`,
+          );
 
-					// Add hover tooltip with details
-					const sd = siteData[sid] || site;
-					const desc = sd.desc || "";
-					const loc = sd.location || "";
-					poly.bindTooltip(
-						`
+          // Add hover tooltip with details
+          const sd = siteData[sid] || site;
+          const desc = sd.desc || "";
+          const loc = sd.location || "";
+          poly.bindTooltip(
+            `
                     <div class="p-1">
                         <div class="font-bold text-slate-800 text-sm">${site.name}</div>
                         <div class="text-[10px] text-purple-700 font-bold mb-1">${badge}</div>
@@ -1129,263 +1018,251 @@
                         ${desc ? `<div class="text-xs text-slate-500 italic truncate max-w-[200px]">${desc}</div>` : ""}
                     </div>
                 `,
-						{
-							sticky: true,
-							className:
-								"custom-map-tooltip rounded-lg border-slate-200 shadow-sm",
-						},
-					);
+            {
+              sticky: true,
+              className:
+                "custom-map-tooltip rounded-lg border-slate-200 shadow-sm",
+            },
+          );
 
-					poly.addTo(portfolioMap);
-					allLayers.push(poly);
+          poly.addTo(portfolioMap);
+          allLayers.push(poly);
 
-					// Sidebar entry
-					const div = document.createElement("div");
-					div.dataset.sid = sid; // tag for delete lookup
-					div.className =
-						"flex items-center gap-2 text-xs py-1.5 border-b border-slate-100 last:border-0 cursor-pointer hover:bg-slate-50 rounded px-1 transition";
-					div.innerHTML = `<span style="background:${site.color}" class="w-2.5 h-2.5 rounded-full shrink-0"></span><span class="font-semibold text-slate-800">${site.name}</span><span class="ml-auto text-[10px] text-slate-400 font-medium">${sid}</span>`;
-					div.onclick = () => {
-						portfolioMap.fitBounds(poly.getBounds(), {
-							padding: [20, 20],
-						});
-						poly.openPopup();
-					};
-					listEl.appendChild(div);
-				});
+          // Sidebar entry
+          const div = document.createElement("div");
+          div.dataset.sid = sid; // tag for delete lookup
+          div.className =
+            "flex items-center gap-2 text-xs py-1.5 border-b border-slate-100 last:border-0 cursor-pointer hover:bg-slate-50 rounded px-1 transition";
+          div.innerHTML = `<span style="background:${site.color}" class="w-2.5 h-2.5 rounded-full shrink-0"></span><span class="font-semibold text-slate-800">${site.name}</span><span class="ml-auto text-[10px] text-slate-400 font-medium">${sid}</span>`;
+          div.onclick = () => {
+            portfolioMap.fitBounds(poly.getBounds(), {
+              padding: [20, 20],
+            });
+            poly.openPopup();
+          };
+          listEl.appendChild(div);
+        });
 
-				if (allLayers.length) {
-					const group = L.featureGroup(allLayers);
-					portfolioMap.fitBounds(group.getBounds(), {
-						padding: [30, 30],
-					});
-				}
-			}
+        if (allLayers.length) {
+          const group = L.featureGroup(allLayers);
+          portfolioMap.fitBounds(group.getBounds(), {
+            padding: [30, 30],
+          });
+        }
+      }
 
-			// --- INITIALIZATION ---
-			document.addEventListener("DOMContentLoaded", () => {
-				loadFromLocalStorage();
-				populateDashboardCards();
-				initCharts();
+      // --- INITIALIZATION ---
+      document.addEventListener("DOMContentLoaded", () => {
+        loadFromLocalStorage();
+        populateDashboardCards();
+        initCharts();
 
-				// Set default dates
-				let today = new Date();
-				let lastYear = new Date();
-				lastYear.setFullYear(today.getFullYear() - 1);
+        // Set default dates
+        let today = new Date();
+        let lastYear = new Date();
+        lastYear.setFullYear(today.getFullYear() - 1);
 
-				document.getElementById("dateTo").value = today
-					.toISOString()
-					.split("T")[0];
-				document.getElementById("dateFrom").value = lastYear
-					.toISOString()
-					.split("T")[0];
+        document.getElementById("dateTo").value = today
+          .toISOString()
+          .split("T")[0];
+        document.getElementById("dateFrom").value = lastYear
+          .toISOString()
+          .split("T")[0];
 
-				// Setup dropdown listeners
-				const checkboxes = document.querySelectorAll(".comp-check");
-				checkboxes.forEach((cb) => {
-					cb.addEventListener("change", updateDropdownText);
-				});
+        // Setup dropdown listeners
+        const checkboxes = document.querySelectorAll(".comp-check");
+        checkboxes.forEach((cb) => {
+          cb.addEventListener("change", updateDropdownText);
+        });
 
-				// Initial analysis run
-				runConstructionAnalysis();
-				setLayer("rgb");
-			});
+        // Initial analysis run
+        runConstructionAnalysis();
+        setLayer("rgb");
+      });
 
-			// Close dropdown when clicking outside
-			window.onclick = function (event) {
-				if (!event.target.closest(".relative")) {
-					document
-						.getElementById("compDropdown")
-						.classList.remove("show");
-				}
-			};
+      // Close dropdown when clicking outside
+      window.onclick = function (event) {
+        if (!event.target.closest(".relative")) {
+          document.getElementById("compDropdown").classList.remove("show");
+        }
+      };
 
-			function toggleDropdown(id) {
-				document.getElementById(id).classList.toggle("show");
-			}
+      function toggleDropdown(id) {
+        document.getElementById(id).classList.toggle("show");
+      }
 
-			function updateDropdownText() {
-				const checked = document.querySelectorAll(
-					".comp-check:checked",
-				);
-				const textElement = document.getElementById("compDropdownText");
-				if (checked.length === 0) {
-					textElement.innerText = "Select Competitor Sites...";
-					textElement.classList.add("text-slate-400");
-				} else {
-					textElement.innerText = `${checked.length} Competitor(s) Selected`;
-					textElement.classList.remove("text-slate-400");
-				}
-			}
+      function updateDropdownText() {
+        const checked = document.querySelectorAll(".comp-check:checked");
+        const textElement = document.getElementById("compDropdownText");
+        if (checked.length === 0) {
+          textElement.innerText = "Select Competitor Sites...";
+          textElement.classList.add("text-slate-400");
+        } else {
+          textElement.innerText = `${checked.length} Competitor(s) Selected`;
+          textElement.classList.remove("text-slate-400");
+        }
+      }
 
-			// --- VIEW ROUTING ---
-			function switchView(viewName) {
-				appState.view = viewName;
+      // --- VIEW ROUTING ---
+      function switchView(viewName) {
+        appState.view = viewName;
 
-				// Hide all views
-				document
-					.querySelectorAll(".view-section")
-					.forEach((el) => el.classList.add("hidden"));
+        // Hide all views
+        document
+          .querySelectorAll(".view-section")
+          .forEach((el) => el.classList.add("hidden"));
 
-				// Reset nav buttons
-				document.querySelectorAll(".nav-btn").forEach((btn) => {
-					btn.classList.remove(
-						"text-purple-700",
-						"bg-white",
-						"border-purple-700",
-						"shadow-[0_-4px_6px_-6px_rgba(0,0,0,0.1)]",
-					);
-					btn.classList.add("text-slate-500", "border-transparent");
-				});
+        // Reset nav buttons
+        document.querySelectorAll(".nav-btn").forEach((btn) => {
+          btn.classList.remove(
+            "text-purple-700",
+            "bg-white",
+            "border-purple-700",
+            "shadow-[0_-4px_6px_-6px_rgba(0,0,0,0.1)]",
+          );
+          btn.classList.add("text-slate-500", "border-transparent");
+        });
 
-				// Show Active View & Update Nav Tab
-				document
-					.getElementById(`view-${viewName}`)
-					.classList.remove("hidden");
-				let activeBtn = document.getElementById(`nav-${viewName}`);
-				activeBtn.classList.remove(
-					"text-slate-500",
-					"border-transparent",
-				);
-				activeBtn.classList.add(
-					"text-purple-700",
-					"bg-white",
-					"border-purple-700",
-					"shadow-[0_-4px_6px_-6px_rgba(0,0,0,0.1)]",
-				);
+        // Show Active View & Update Nav Tab
+        document.getElementById(`view-${viewName}`).classList.remove("hidden");
+        let activeBtn = document.getElementById(`nav-${viewName}`);
+        activeBtn.classList.remove("text-slate-500", "border-transparent");
+        activeBtn.classList.add(
+          "text-purple-700",
+          "bg-white",
+          "border-purple-700",
+          "shadow-[0_-4px_6px_-6px_rgba(0,0,0,0.1)]",
+        );
 
-				// Update Header texts
-				const titles = {
-					upload: {
-						t: "Asset Upload Engine",
-						s: "Import KML/KMZ boundaries for geospatial conversion",
-					},
-					dashboard: {
-						t: "Portfolio Dashboard",
-						s: "High-level metrics across all monitored assets",
-					},
-					catchment: {
-						t: "Catchment Analysis",
-						s: "DuckDB spatial queries for encumbrances & boundaries",
-					},
-					construction: {
-						t: "Construction Progress",
-						s: "Multi-temporal remote sensing & asset tracking",
-					},
-				};
-				document.getElementById("headerTitle").innerText =
-					titles[viewName].t;
-				document.getElementById("headerSubtitle").innerText =
-					titles[viewName].s;
+        // Update Header texts
+        const titles = {
+          upload: {
+            t: "Asset Upload Engine",
+            s: "Import KML/KMZ boundaries for geospatial conversion",
+          },
+          dashboard: {
+            t: "Portfolio Dashboard",
+            s: "High-level metrics across all monitored assets",
+          },
+          catchment: {
+            t: "Catchment Analysis",
+            s: "DuckDB spatial queries for encumbrances & boundaries",
+          },
+          construction: {
+            t: "Construction Progress",
+            s: "Multi-temporal remote sensing & asset tracking",
+          },
+        };
+        document.getElementById("headerTitle").innerText = titles[viewName].t;
+        document.getElementById("headerSubtitle").innerText =
+          titles[viewName].s;
 
-				// Resize charts
-				if (viewName === "construction") {
-					if (lineChart) lineChart.resize();
-					if (barChart) barChart.resize();
-				}
-				// Init portfolio map lazily on first visit
-				if (viewName === "dashboard") {
-					setTimeout(() => {
-						initPortfolioMap();
-						if (portfolioMap) portfolioMap.invalidateSize();
-					}, 100);
-				}
-			}
+        // Resize charts
+        if (viewName === "construction") {
+          if (lineChart) lineChart.resize();
+          if (barChart) barChart.resize();
+        }
+        // Init portfolio map lazily on first visit
+        if (viewName === "dashboard") {
+          setTimeout(() => {
+            initPortfolioMap();
+            if (portfolioMap) portfolioMap.invalidateSize();
+          }, 100);
+        }
+      }
 
-			// --- DASHBOARD POPULATION ---
-			function updateDashboardStats() {
-				const all = Object.values(siteData);
-				document.getElementById("statTotal").textContent = all.length;
-				document.getElementById("statOwn").textContent = all.filter(
-					(s) => s.type === "own",
-				).length;
-				document.getElementById("statComp").textContent = all.filter(
-					(s) => s.type === "comp",
-				).length;
-			}
+      // --- DASHBOARD POPULATION ---
+      function updateDashboardStats() {
+        const all = Object.values(siteData);
+        document.getElementById("statTotal").textContent = all.length;
+        document.getElementById("statOwn").textContent = all.filter(
+          (s) => s.type === "own",
+        ).length;
+        document.getElementById("statComp").textContent = all.filter(
+          (s) => s.type === "comp",
+        ).length;
+      }
 
-			function populateSelectors() {
-				const catchmentSelect = document.getElementById(
-					"catchmentAssetSelector",
-				);
-				const primarySelect = document.getElementById("primaryTarget");
-				const compDropdown = document.getElementById("compDropdown");
+      function populateSelectors() {
+        const catchmentSelect = document.getElementById(
+          "catchmentAssetSelector",
+        );
+        const primarySelect = document.getElementById("primaryTarget");
+        const compDropdown = document.getElementById("compDropdown");
 
-				if (catchmentSelect) catchmentSelect.innerHTML = "";
-				if (primarySelect) primarySelect.innerHTML = "";
-				if (compDropdown) compDropdown.innerHTML = "";
+        if (catchmentSelect) catchmentSelect.innerHTML = "";
+        if (primarySelect) primarySelect.innerHTML = "";
+        if (compDropdown) compDropdown.innerHTML = "";
 
-				let hasOwn = false;
-				let hasComp = false;
+        let hasOwn = false;
+        let hasComp = false;
 
-				Object.values(siteData).forEach((site) => {
-					if (site.type === "own") {
-						hasOwn = true;
-						// Add to Catchment Selector
-						if (catchmentSelect) {
-							const opt = document.createElement("option");
-							opt.value = site.id;
-							opt.textContent = `${site.name} (Own Site)`;
-							opt.setAttribute("data-type", "own");
-							catchmentSelect.appendChild(opt);
-						}
-						// Add to Primary Target Selector (Construction)
-						if (primarySelect) {
-							const opt = document.createElement("option");
-							opt.value = site.id;
-							opt.textContent = `${site.name} (Own Site)`;
-							primarySelect.appendChild(opt);
-						}
-					} else if (site.type === "comp") {
-						hasComp = true;
-						// Add to Competitor Dropdown (Construction)
-						if (compDropdown) {
-							const label = document.createElement("label");
-							label.className =
-								"flex items-center gap-3 px-3 py-2 hover:bg-slate-50 rounded cursor-pointer transition";
-							label.innerHTML = `
+        Object.values(siteData).forEach((site) => {
+          if (site.type === "own") {
+            hasOwn = true;
+            // Add to Catchment Selector
+            if (catchmentSelect) {
+              const opt = document.createElement("option");
+              opt.value = site.id;
+              opt.textContent = `${site.name} (Own Site)`;
+              opt.setAttribute("data-type", "own");
+              catchmentSelect.appendChild(opt);
+            }
+            // Add to Primary Target Selector (Construction)
+            if (primarySelect) {
+              const opt = document.createElement("option");
+              opt.value = site.id;
+              opt.textContent = `${site.name} (Own Site)`;
+              primarySelect.appendChild(opt);
+            }
+          } else if (site.type === "comp") {
+            hasComp = true;
+            // Add to Competitor Dropdown (Construction)
+            if (compDropdown) {
+              const label = document.createElement("label");
+              label.className =
+                "flex items-center gap-3 px-3 py-2 hover:bg-slate-50 rounded cursor-pointer transition";
+              label.innerHTML = `
                             <input type="checkbox" value="${site.id}" class="comp-check accent-purple-600 w-4 h-4" onchange="updateDropdownText()">
                             <span class="text-sm font-medium text-slate-700">${site.name}</span>
                         `;
-							compDropdown.appendChild(label);
-						}
-					}
-				});
+              compDropdown.appendChild(label);
+            }
+          }
+        });
 
-				// Defaults if empty
-				if (!hasOwn) {
-					if (catchmentSelect)
-						catchmentSelect.innerHTML =
-							'<option value="alpha" data-type="own">Alpha Hub (Own Site)</option>';
-					if (primarySelect)
-						primarySelect.innerHTML =
-							'<option value="alpha">Alpha Hub (Own Site)</option>';
-				}
-				if (!hasComp && compDropdown) {
-					compDropdown.innerHTML = `<div class="px-3 py-2 text-sm text-slate-500">No competitor sites available.</div>`;
-				}
-				updateDropdownText();
-			}
+        // Defaults if empty
+        if (!hasOwn) {
+          if (catchmentSelect)
+            catchmentSelect.innerHTML =
+              '<option value="alpha" data-type="own">Alpha Hub (Own Site)</option>';
+          if (primarySelect)
+            primarySelect.innerHTML =
+              '<option value="alpha">Alpha Hub (Own Site)</option>';
+        }
+        if (!hasComp && compDropdown) {
+          compDropdown.innerHTML = `<div class="px-3 py-2 text-sm text-slate-500">No competitor sites available.</div>`;
+        }
+        updateDropdownText();
+      }
 
-			function populateDashboardCards() {
-				const container = document.getElementById(
-					"dashboard-cards-container",
-				);
-				container.innerHTML = "";
-				updateDashboardStats();
-				populateSelectors();
+      function populateDashboardCards() {
+        const container = document.getElementById("dashboard-cards-container");
+        container.innerHTML = "";
+        updateDashboardStats();
+        populateSelectors();
 
-				Object.values(siteData).forEach((site) => {
-					const badge =
-						site.type === "own"
-							? `<span class="bg-purple-100 text-purple-700 px-2 py-0.5 rounded text-[10px] font-bold">OWN ASSET</span>`
-							: `<span class="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-[10px] font-bold">COMPETITOR</span>`;
+        Object.values(siteData).forEach((site) => {
+          const badge =
+            site.type === "own"
+              ? `<span class="bg-purple-100 text-purple-700 px-2 py-0.5 rounded text-[10px] font-bold">OWN ASSET</span>`
+              : `<span class="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-[10px] font-bold">COMPETITOR</span>`;
 
-					const card = document.createElement("div");
-					card.id = `card-${site.id}`;
-					card.className =
-						"bg-white border border-slate-200 rounded-xl p-5 hover:border-purple-200 transition group";
-					card.innerHTML = `
+          const card = document.createElement("div");
+          card.id = `card-${site.id}`;
+          card.className =
+            "bg-white border border-slate-200 rounded-xl p-5 hover:border-purple-200 transition group";
+          card.innerHTML = `
                     <div class="flex justify-between items-start mb-3">
                         <div class="flex-1 min-w-0 pr-2">
                             <div class="flex items-center gap-1.5">
@@ -1420,459 +1297,412 @@
                         </div>
                     </div>
                 `;
-					container.appendChild(card);
-				});
-				if (typeof lucide !== "undefined") lucide.createIcons();
-			}
+          container.appendChild(card);
+        });
+        if (typeof lucide !== "undefined") lucide.createIcons();
+      }
 
-			// --- INLINE CARD EDIT ---
-			function startEdit(id) {
-				document.getElementById(`view-${id}`).classList.add("hidden");
-				document
-					.getElementById(`edit-${id}`)
-					.classList.remove("hidden");
-			}
-			function cancelEdit(id) {
-				document.getElementById(`edit-${id}`).classList.add("hidden");
-				document
-					.getElementById(`view-${id}`)
-					.classList.remove("hidden");
-			}
-			// --- LOCAL STORAGE PERSISTENCE ---
-			function saveToLocalStorage() {
-				// Keep custom sites separate from default
-				const customSites = {};
-				const customPolys = {};
-				Object.keys(siteData).forEach((id) => {
-					// If it's a site we added (id starts with site_)
-					if (id.startsWith("site_")) {
-						customSites[id] = siteData[id];
-						if (sitePolygons[id]) {
-							customPolys[id] = sitePolygons[id];
-						}
-					}
-				});
-				localStorage.setItem(
-					"horizonCustomSites",
-					JSON.stringify(customSites),
-				);
-				localStorage.setItem(
-					"horizonCustomPolys",
-					JSON.stringify(customPolys),
-				);
-			}
+      // --- INLINE CARD EDIT ---
+      function startEdit(id) {
+        document.getElementById(`view-${id}`).classList.add("hidden");
+        document.getElementById(`edit-${id}`).classList.remove("hidden");
+      }
+      function cancelEdit(id) {
+        document.getElementById(`edit-${id}`).classList.add("hidden");
+        document.getElementById(`view-${id}`).classList.remove("hidden");
+      }
+      // --- LOCAL STORAGE PERSISTENCE ---
+      function saveToLocalStorage() {
+        // Keep custom sites separate from default
+        const customSites = {};
+        const customPolys = {};
+        Object.keys(siteData).forEach((id) => {
+          // If it's a site we added (id starts with site_)
+          if (id.startsWith("site_")) {
+            customSites[id] = siteData[id];
+            if (sitePolygons[id]) {
+              customPolys[id] = sitePolygons[id];
+            }
+          }
+        });
+        localStorage.setItem("horizonCustomSites", JSON.stringify(customSites));
+        localStorage.setItem("horizonCustomPolys", JSON.stringify(customPolys));
+      }
 
-			function loadFromLocalStorage() {
-				const savedSites = localStorage.getItem("horizonCustomSites");
-				const savedPolys = localStorage.getItem("horizonCustomPolys");
+      function loadFromLocalStorage() {
+        const savedSites = localStorage.getItem("horizonCustomSites");
+        const savedPolys = localStorage.getItem("horizonCustomPolys");
 
-				if (savedSites) {
-					const parsedSites = JSON.parse(savedSites);
-					Object.assign(siteData, parsedSites);
-				}
-				if (savedPolys) {
-					const parsedPolys = JSON.parse(savedPolys);
-					Object.assign(sitePolygons, parsedPolys);
-				}
-			}
+        if (savedSites) {
+          const parsedSites = JSON.parse(savedSites);
+          Object.assign(siteData, parsedSites);
+        }
+        if (savedPolys) {
+          const parsedPolys = JSON.parse(savedPolys);
+          Object.assign(sitePolygons, parsedPolys);
+        }
+      }
 
-			function exportPortfolio() {
-				saveToLocalStorage(); // Ensure latest is saved
-				const exportData = {
-					sites: JSON.parse(
-						localStorage.getItem("horizonCustomSites") || "{}",
-					),
-					polys: JSON.parse(
-						localStorage.getItem("horizonCustomPolys") || "{}",
-					),
-				};
-				const blob = new Blob([JSON.stringify(exportData, null, 2)], {
-					type: "application/json",
-				});
-				const a = document.createElement("a");
-				a.href = URL.createObjectURL(blob);
-				a.download = `horizon_portfolio_backup_${new Date().toISOString().split("T")[0]}.json`;
-				a.click();
-			}
+      function exportPortfolio() {
+        saveToLocalStorage(); // Ensure latest is saved
+        const exportData = {
+          sites: JSON.parse(localStorage.getItem("horizonCustomSites") || "{}"),
+          polys: JSON.parse(localStorage.getItem("horizonCustomPolys") || "{}"),
+        };
+        const blob = new Blob([JSON.stringify(exportData, null, 2)], {
+          type: "application/json",
+        });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `horizon_portfolio_backup_${new Date().toISOString().split("T")[0]}.json`;
+        a.click();
+      }
 
-			function importPortfolio(event) {
-				const file = event.target.files[0];
-				if (!file) return;
-				const reader = new FileReader();
-				reader.onload = (e) => {
-					try {
-						const data = JSON.parse(e.target.result);
-						if (data.sites) {
-							localStorage.setItem(
-								"horizonCustomSites",
-								JSON.stringify(data.sites),
-							);
-							Object.assign(siteData, data.sites);
-						}
-						if (data.polys) {
-							localStorage.setItem(
-								"horizonCustomPolys",
-								JSON.stringify(data.polys),
-							);
-							Object.assign(sitePolygons, data.polys);
-						}
-						if (portfolioMap) {
-							initPortfolioMap(); // Re-render map
-						}
-						populateDashboardCards();
-						updateDashboardStats();
-						alert("Portfolio imported successfully!");
-					} catch (err) {
-						alert("Invalid portfolio backup file.");
-					}
-				};
-				reader.readAsText(file);
-				event.target.value = ""; // Reset input
-			}
+      function importPortfolio(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          try {
+            const data = JSON.parse(e.target.result);
+            if (data.sites) {
+              localStorage.setItem(
+                "horizonCustomSites",
+                JSON.stringify(data.sites),
+              );
+              Object.assign(siteData, data.sites);
+            }
+            if (data.polys) {
+              localStorage.setItem(
+                "horizonCustomPolys",
+                JSON.stringify(data.polys),
+              );
+              Object.assign(sitePolygons, data.polys);
+            }
+            if (portfolioMap) {
+              initPortfolioMap(); // Re-render map
+            }
+            populateDashboardCards();
+            updateDashboardStats();
+            alert("Portfolio imported successfully!");
+          } catch (err) {
+            alert("Invalid portfolio backup file.");
+          }
+        };
+        reader.readAsText(file);
+        event.target.value = ""; // Reset input
+      }
 
-			function saveEdit(id) {
-				const newName = document
-					.getElementById(`inp-name-${id}`)
-					.value.trim();
-				const newLoc = document
-					.getElementById(`inp-loc-${id}`)
-					.value.trim();
-				if (!newName) return;
-				siteData[id].name = newName;
-				siteData[id].location = newLoc;
-				document.getElementById(`name-${id}`).textContent = newName;
-				document.getElementById(`loc-${id}`).textContent = newLoc;
-				cancelEdit(id);
-				saveToLocalStorage();
-			}
+      function saveEdit(id) {
+        const newName = document.getElementById(`inp-name-${id}`).value.trim();
+        const newLoc = document.getElementById(`inp-loc-${id}`).value.trim();
+        if (!newName) return;
+        siteData[id].name = newName;
+        siteData[id].location = newLoc;
+        document.getElementById(`name-${id}`).textContent = newName;
+        document.getElementById(`loc-${id}`).textContent = newLoc;
+        cancelEdit(id);
+        saveToLocalStorage();
+      }
 
-			// --- DELETE CARD ---
-			function deleteCard(id) {
-				if (
-					!confirm(
-						`Remove "${siteData[id]?.name || id}" from portfolio?`,
-					)
-				)
-					return;
+      // --- DELETE CARD ---
+      function deleteCard(id) {
+        if (!confirm(`Remove "${siteData[id]?.name || id}" from portfolio?`))
+          return;
 
-				// Remove from siteData
-				delete siteData[id];
+        // Remove from siteData
+        delete siteData[id];
 
-				// Remove polygon from map and sitePolygons registry
-				if (sitePolygons[id]) {
-					if (portfolioMap) {
-						portfolioMap.eachLayer((layer) => {
-							if (layer._siteId === id)
-								portfolioMap.removeLayer(layer);
-						});
-					}
-					delete sitePolygons[id];
-				}
+        // Remove polygon from map and sitePolygons registry
+        if (sitePolygons[id]) {
+          if (portfolioMap) {
+            portfolioMap.eachLayer((layer) => {
+              if (layer._siteId === id) portfolioMap.removeLayer(layer);
+            });
+          }
+          delete sitePolygons[id];
+        }
 
-				saveToLocalStorage();
+        saveToLocalStorage();
 
-				// Remove card from DOM
-				const card = document.getElementById(`card-${id}`);
-				if (card) card.remove();
+        // Remove card from DOM
+        const card = document.getElementById(`card-${id}`);
+        if (card) card.remove();
 
-				// Remove from Sites Overview list
-				const listEl = document.getElementById("portfolio-site-list");
-				const item = listEl.querySelector(`[data-sid="${id}"]`);
-				if (item) item.remove();
+        // Remove from Sites Overview list
+        const listEl = document.getElementById("portfolio-site-list");
+        const item = listEl.querySelector(`[data-sid="${id}"]`);
+        if (item) item.remove();
 
-				updateDashboardStats();
-				if (typeof lucide !== "undefined") lucide.createIcons();
-			}
+        updateDashboardStats();
+        if (typeof lucide !== "undefined") lucide.createIcons();
+      }
 
-			// --- FILE UPLOAD LOGIC ---
-			let uploadedGeo = null;
-			let uploadedFile = null;
+      // --- FILE UPLOAD LOGIC ---
+      let uploadedGeo = null;
+      let uploadedFile = null;
 
-			function handleFileDrop(event) {
-				event.preventDefault();
-				document
-					.getElementById("dropZone")
-					.classList.remove("border-purple-500", "bg-purple-50");
-				const file = event.dataTransfer.files[0];
-				if (file) processUploadFile(file);
-			}
+      function handleFileDrop(event) {
+        event.preventDefault();
+        document
+          .getElementById("dropZone")
+          .classList.remove("border-purple-500", "bg-purple-50");
+        const file = event.dataTransfer.files[0];
+        if (file) processUploadFile(file);
+      }
 
-			function handleFileSelect(event) {
-				const file = event.target.files[0];
-				if (file) processUploadFile(file);
-			}
+      function handleFileSelect(event) {
+        const file = event.target.files[0];
+        if (file) processUploadFile(file);
+      }
 
-			function processUploadFile(file) {
-				uploadedFile = file; // keep raw File for saving to disk
-				const name = file.name;
-				const baseName = name
-					.replace(/\.(csv|kml|kmz)$/i, "")
-					.replace(/[_-]/g, " ");
-				document.getElementById("uploadSiteName").value = baseName;
+      function processUploadFile(file) {
+        uploadedFile = file; // keep raw File for saving to disk
+        const name = file.name;
+        const baseName = name
+          .replace(/\.(csv|kml|kmz)$/i, "")
+          .replace(/[_-]/g, " ");
+        document.getElementById("uploadSiteName").value = baseName;
 
-				const label = document.getElementById("uploadFileName");
-				label.textContent = "📎 " + name;
-				label.classList.remove("hidden");
+        const label = document.getElementById("uploadFileName");
+        label.textContent = "📎 " + name;
+        label.classList.remove("hidden");
 
-				const ext = name.split(".").pop().toLowerCase();
-				const reader = new FileReader();
+        const ext = name.split(".").pop().toLowerCase();
+        const reader = new FileReader();
 
-				if (ext === "csv") {
-					reader.onload = (e) => {
-						try {
-							const rows = e.target.result
-								.split("\n")
-								.filter((r) => r.trim());
-							const headers = rows[0].split(",");
-							const geoIdx = headers.findIndex(
-								(h) => h.trim() === ".geo",
-							);
-							if (geoIdx >= 0 && rows[1]) {
-								const raw = rows[1];
-								const match =
-									raw.match(/"(\{.*\})"/s) ||
-									raw.match(/(\{.*\})/s);
-								if (match) {
-									const cleaned = match[1].replace(
-										/""/g,
-										'"',
-									);
-									uploadedGeo = JSON.parse(cleaned);
-									autoDetectLocation(uploadedGeo);
-								}
-							}
-						} catch (ex) {
-							console.warn("CSV parse error:", ex);
-							uploadedGeo = null;
-						}
-					};
-					reader.readAsText(file);
-				} else if (ext === "kml") {
-					reader.onload = (e) => {
-						try {
-							const parser = new DOMParser();
-							const kml = parser.parseFromString(
-								e.target.result,
-								"text/xml",
-							);
-							uploadedGeo = kmlToGeoJSON(kml);
-							if (uploadedGeo) autoDetectLocation(uploadedGeo);
-						} catch (ex) {
-							console.warn("KML parse error:", ex);
-							uploadedGeo = null;
-						}
-					};
-					reader.readAsText(file);
-				} else if (ext === "kmz") {
-					uploadedGeo = null;
-					console.info(
-						"KMZ: geometry not extractable in-browser. Fill location manually.",
-					);
-					reader.readAsArrayBuffer(file);
-				}
-			}
+        if (ext === "csv") {
+          reader.onload = (e) => {
+            try {
+              const rows = e.target.result.split("\n").filter((r) => r.trim());
+              const headers = rows[0].split(",");
+              const geoIdx = headers.findIndex((h) => h.trim() === ".geo");
+              if (geoIdx >= 0 && rows[1]) {
+                const raw = rows[1];
+                const match =
+                  raw.match(/"(\{.*\})"/s) || raw.match(/(\{.*\})/s);
+                if (match) {
+                  const cleaned = match[1].replace(/""/g, '"');
+                  uploadedGeo = JSON.parse(cleaned);
+                  autoDetectLocation(uploadedGeo);
+                }
+              }
+            } catch (ex) {
+              console.warn("CSV parse error:", ex);
+              uploadedGeo = null;
+            }
+          };
+          reader.readAsText(file);
+        } else if (ext === "kml") {
+          reader.onload = (e) => {
+            try {
+              const parser = new DOMParser();
+              const kml = parser.parseFromString(e.target.result, "text/xml");
+              uploadedGeo = kmlToGeoJSON(kml);
+              if (uploadedGeo) autoDetectLocation(uploadedGeo);
+            } catch (ex) {
+              console.warn("KML parse error:", ex);
+              uploadedGeo = null;
+            }
+          };
+          reader.readAsText(file);
+        } else if (ext === "kmz") {
+          uploadedGeo = null;
+          console.info(
+            "KMZ: geometry not extractable in-browser. Fill location manually.",
+          );
+          reader.readAsArrayBuffer(file);
+        }
+      }
 
-			// --- CENTROID & REVERSE GEOCODING ---
-			function getGeoCentroid(geo) {
-				// Returns [lng, lat] centroid of first ring
-				let ring;
-				if (geo.type === "Polygon") {
-					ring = geo.coordinates[0];
-				} else if (geo.type === "MultiPolygon") {
-					ring = geo.coordinates[0][0];
-				} else return null;
-				if (!ring || !ring.length) return null;
-				const lng = ring.reduce((s, c) => s + c[0], 0) / ring.length;
-				const lat = ring.reduce((s, c) => s + c[1], 0) / ring.length;
-				return [lng, lat];
-			}
+      // --- CENTROID & REVERSE GEOCODING ---
+      function getGeoCentroid(geo) {
+        // Returns [lng, lat] centroid of first ring
+        let ring;
+        if (geo.type === "Polygon") {
+          ring = geo.coordinates[0];
+        } else if (geo.type === "MultiPolygon") {
+          ring = geo.coordinates[0][0];
+        } else return null;
+        if (!ring || !ring.length) return null;
+        const lng = ring.reduce((s, c) => s + c[0], 0) / ring.length;
+        const lat = ring.reduce((s, c) => s + c[1], 0) / ring.length;
+        return [lng, lat];
+      }
 
-			function autoDetectLocation(geo) {
-				const centroid = getGeoCentroid(geo);
-				if (!centroid) return;
-				const [lng, lat] = centroid;
+      function autoDetectLocation(geo) {
+        const centroid = getGeoCentroid(geo);
+        if (!centroid) return;
+        const [lng, lat] = centroid;
 
-				const statusSpin = document.getElementById("locDetectStatus");
-				const statusDone = document.getElementById("locDetectDone");
-				const locInput = document.getElementById("uploadLocation");
+        const statusSpin = document.getElementById("locDetectStatus");
+        const statusDone = document.getElementById("locDetectDone");
+        const locInput = document.getElementById("uploadLocation");
 
-				statusDone.classList.add("hidden");
-				statusSpin.classList.remove("hidden");
-				locInput.value = "";
-				locInput.placeholder = "Detecting location…";
+        statusDone.classList.add("hidden");
+        statusSpin.classList.remove("hidden");
+        locInput.value = "";
+        locInput.placeholder = "Detecting location…";
 
-				fetch(
-					`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
-					{
-						headers: {
-							"Accept-Language": "en",
-							"User-Agent": "HorizonGeoApp/1.0",
-						},
-					},
-				)
-					.then((r) => r.json())
-					.then((data) => {
-						const addr = data.address || {};
-						// Build a readable place string: neighbourhood/suburb, city/town, state
-						const parts = [
-							addr.suburb ||
-								addr.neighbourhood ||
-								addr.village ||
-								addr.hamlet ||
-								"",
-							addr.city || addr.town || addr.county || "",
-							addr.state || "",
-						].filter(Boolean);
-						const place = parts.length
-							? parts.join(", ")
-							: (data.display_name || "")
-									.split(",")
-									.slice(0, 3)
-									.join(",")
-									.trim();
-						locInput.value = place;
-						locInput.placeholder = "e.g. Hinjawadi, Pune";
-						statusSpin.classList.add("hidden");
-						statusDone.classList.remove("hidden");
-					})
-					.catch(() => {
-						statusSpin.classList.add("hidden");
-						locInput.placeholder =
-							"Could not detect — enter manually";
-					});
-			}
+        fetch(
+          `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
+          {
+            headers: {
+              "Accept-Language": "en",
+              "User-Agent": "HorizonGeoApp/1.0",
+            },
+          },
+        )
+          .then((r) => r.json())
+          .then((data) => {
+            const addr = data.address || {};
+            // Build a readable place string: neighbourhood/suburb, city/town, state
+            const parts = [
+              addr.suburb ||
+                addr.neighbourhood ||
+                addr.village ||
+                addr.hamlet ||
+                "",
+              addr.city || addr.town || addr.county || "",
+              addr.state || "",
+            ].filter(Boolean);
+            const place = parts.length
+              ? parts.join(", ")
+              : (data.display_name || "")
+                  .split(",")
+                  .slice(0, 3)
+                  .join(",")
+                  .trim();
+            locInput.value = place;
+            locInput.placeholder = "e.g. Hinjawadi, Pune";
+            statusSpin.classList.add("hidden");
+            statusDone.classList.remove("hidden");
+          })
+          .catch(() => {
+            statusSpin.classList.add("hidden");
+            locInput.placeholder = "Could not detect — enter manually";
+          });
+      }
 
-			function kmlToGeoJSON(kmlDoc) {
-				// Extract first Polygon or MultiPolygon from KML
-				const polys = Array.from(
-					kmlDoc.getElementsByTagName("Polygon"),
-				);
-				if (!polys.length) return null;
-				const coords = polys
-					.map((p) => {
-						const ring =
-							p.querySelector("outerBoundaryIs coordinates") ||
-							p.querySelector("coordinates");
-						if (!ring) return null;
-						return ring.textContent
-							.trim()
-							.split(/\s+/)
-							.map((c) => {
-								const parts = c.split(",");
-								return [
-									parseFloat(parts[0]),
-									parseFloat(parts[1]),
-								];
-							});
-					})
-					.filter(Boolean);
-				return polys.length === 1
-					? { type: "Polygon", coordinates: [coords[0]] }
-					: {
-							type: "MultiPolygon",
-							coordinates: coords.map((r) => [r]),
-						};
-			}
+      function kmlToGeoJSON(kmlDoc) {
+        // Extract first Polygon or MultiPolygon from KML
+        const polys = Array.from(kmlDoc.getElementsByTagName("Polygon"));
+        if (!polys.length) return null;
+        const coords = polys
+          .map((p) => {
+            const ring =
+              p.querySelector("outerBoundaryIs coordinates") ||
+              p.querySelector("coordinates");
+            if (!ring) return null;
+            return ring.textContent
+              .trim()
+              .split(/\s+/)
+              .map((c) => {
+                const parts = c.split(",");
+                return [parseFloat(parts[0]), parseFloat(parts[1])];
+              });
+          })
+          .filter(Boolean);
+        return polys.length === 1
+          ? { type: "Polygon", coordinates: [coords[0]] }
+          : {
+              type: "MultiPolygon",
+              coordinates: coords.map((r) => [r]),
+            };
+      }
 
-			function submitUpload() {
-				const name = document
-					.getElementById("uploadSiteName")
-					.value.trim();
-				const loc = document
-					.getElementById("uploadLocation")
-					.value.trim();
-				const type = document.getElementById("uploadAssetType").value;
-				const desc =
-					document.getElementById("uploadDesc").value.trim() ||
-					"Uploaded Site";
+      function submitUpload() {
+        const name = document.getElementById("uploadSiteName").value.trim();
+        const loc = document.getElementById("uploadLocation").value.trim();
+        const type = document.getElementById("uploadAssetType").value;
+        const desc =
+          document.getElementById("uploadDesc").value.trim() || "Uploaded Site";
 
-				if (!name) {
-					alert("Please enter a site name.");
-					return;
-				}
-				if (!loc) {
-					alert("Please enter a location/place name.");
-					return;
-				}
+        if (!name) {
+          alert("Please enter a site name.");
+          return;
+        }
+        if (!loc) {
+          alert("Please enter a location/place name.");
+          return;
+        }
 
-				const newId = "site_" + Date.now();
-				const color = type === "own" ? "#7c3aed" : "#f97316";
+        const newId = "site_" + Date.now();
+        const color = type === "own" ? "#7c3aed" : "#f97316";
 
-				siteData[newId] = {
-					id: newId,
-					name,
-					type,
-					location: loc,
-					color,
-					desc,
-					ns: [100, 100, 100, 100, 100, 100, 100, 100, 100, 100],
-					uc: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-					co: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-				};
+        siteData[newId] = {
+          id: newId,
+          name,
+          type,
+          location: loc,
+          color,
+          desc,
+          ns: [100, 100, 100, 100, 100, 100, 100, 100, 100, 100],
+          uc: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+          co: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        };
 
-				if (uploadedGeo) {
-					sitePolygons[newId] = {
-						name,
-						type,
-						color,
-						geo: uploadedGeo,
-					};
-					if (portfolioMap)
-						addPolygonToPortfolioMap(newId, sitePolygons[newId]);
-				}
+        if (uploadedGeo) {
+          sitePolygons[newId] = {
+            name,
+            type,
+            color,
+            geo: uploadedGeo,
+          };
+          if (portfolioMap)
+            addPolygonToPortfolioMap(newId, sitePolygons[newId]);
+        }
 
-				// Save the data to localStorage
-				saveToLocalStorage();
+        // Save the data to localStorage
+        saveToLocalStorage();
 
-				populateDashboardCards();
+        populateDashboardCards();
 
-				const toast = document.getElementById("uploadToast");
-				document.getElementById("uploadToastMsg").textContent =
-					`✓ "${name}" added to portfolio!`;
-				toast.classList.remove("hidden");
-				setTimeout(() => toast.classList.add("hidden"), 3500);
+        const toast = document.getElementById("uploadToast");
+        document.getElementById("uploadToastMsg").textContent =
+          `✓ "${name}" added to portfolio!`;
+        toast.classList.remove("hidden");
+        setTimeout(() => toast.classList.add("hidden"), 3500);
 
-				document.getElementById("uploadSiteName").value = "";
-				document.getElementById("uploadLocation").value = "";
-				document.getElementById("uploadDesc").value = "";
-				document
-					.getElementById("uploadFileName")
-					.classList.add("hidden");
-				document.getElementById("fileInput").value = "";
-				uploadedGeo = null;
-				uploadedFile = null;
+        document.getElementById("uploadSiteName").value = "";
+        document.getElementById("uploadLocation").value = "";
+        document.getElementById("uploadDesc").value = "";
+        document.getElementById("uploadFileName").classList.add("hidden");
+        document.getElementById("fileInput").value = "";
+        uploadedGeo = null;
+        uploadedFile = null;
 
-				if (typeof lucide !== "undefined") lucide.createIcons();
-			}
+        if (typeof lucide !== "undefined") lucide.createIcons();
+      }
 
-			function addPolygonToPortfolioMap(sid, site) {
-				const geo = site.geo;
-				let coords;
-				if (geo.type === "MultiPolygon") {
-					coords = geo.coordinates.map((poly) =>
-						poly[0].map((c) => [c[1], c[0]]),
-					);
-				} else {
-					coords = geo.coordinates[0].map((c) => [c[1], c[0]]);
-				}
-				const poly = L.polygon(coords, {
-					color: site.color,
-					fillColor: site.color,
-					fillOpacity: 0.25,
-					weight: 2,
-				});
-				poly._siteId = sid; // tag for delete lookup
-				const badge = site.type === "own" ? "Own Asset" : "Competitor";
-				poly.bindPopup(
-					`<b>${site.name}</b><br><span style="font-size:11px;color:#64748b">${badge}</span>`,
-				);
+      function addPolygonToPortfolioMap(sid, site) {
+        const geo = site.geo;
+        let coords;
+        if (geo.type === "MultiPolygon") {
+          coords = geo.coordinates.map((poly) =>
+            poly[0].map((c) => [c[1], c[0]]),
+          );
+        } else {
+          coords = geo.coordinates[0].map((c) => [c[1], c[0]]);
+        }
+        const poly = L.polygon(coords, {
+          color: site.color,
+          fillColor: site.color,
+          fillOpacity: 0.25,
+          weight: 2,
+        });
+        poly._siteId = sid; // tag for delete lookup
+        const badge = site.type === "own" ? "Own Asset" : "Competitor";
+        poly.bindPopup(
+          `<b>${site.name}</b><br><span style="font-size:11px;color:#64748b">${badge}</span>`,
+        );
 
-				// Add hover tooltip with details
-				const sd = siteData[sid] || site;
-				const desc = sd.desc || "";
-				const loc = sd.location || "";
-				poly.bindTooltip(
-					`
+        // Add hover tooltip with details
+        const sd = siteData[sid] || site;
+        const desc = sd.desc || "";
+        const loc = sd.location || "";
+        poly.bindTooltip(
+          `
                 <div class="p-1">
                     <div class="font-bold text-slate-800 text-sm">${site.name}</div>
                     <div class="text-[10px] text-purple-700 font-bold mb-1">${badge}</div>
@@ -1880,104 +1710,104 @@
                     ${desc ? `<div class="text-xs text-slate-500 italic truncate max-w-[200px]">${desc}</div>` : ""}
                 </div>
             `,
-					{
-						sticky: true,
-						className:
-							"custom-map-tooltip rounded-lg border-slate-200 shadow-sm",
-					},
-				);
+          {
+            sticky: true,
+            className:
+              "custom-map-tooltip rounded-lg border-slate-200 shadow-sm",
+          },
+        );
 
-				poly.addTo(portfolioMap);
+        poly.addTo(portfolioMap);
 
-				const listEl = document.getElementById("portfolio-site-list");
-				const div = document.createElement("div");
-				div.dataset.sid = sid; // tag for delete lookup
-				div.className =
-					"flex items-center gap-2 text-xs py-1.5 border-b border-slate-100 last:border-0 cursor-pointer hover:bg-slate-50 rounded px-1 transition";
-				div.innerHTML = `<span style="background:${site.color}" class="w-2.5 h-2.5 rounded-full shrink-0"></span><span class="font-semibold text-slate-800">${site.name}</span><span class="ml-auto text-[10px] text-slate-400 font-medium">${sid}</span>`;
-				div.onclick = () => {
-					portfolioMap.fitBounds(poly.getBounds(), {
-						padding: [20, 20],
-					});
-					poly.openPopup();
-				};
-				listEl.appendChild(div);
-			}
+        const listEl = document.getElementById("portfolio-site-list");
+        const div = document.createElement("div");
+        div.dataset.sid = sid; // tag for delete lookup
+        div.className =
+          "flex items-center gap-2 text-xs py-1.5 border-b border-slate-100 last:border-0 cursor-pointer hover:bg-slate-50 rounded px-1 transition";
+        div.innerHTML = `<span style="background:${site.color}" class="w-2.5 h-2.5 rounded-full shrink-0"></span><span class="font-semibold text-slate-800">${site.name}</span><span class="ml-auto text-[10px] text-slate-400 font-medium">${sid}</span>`;
+        div.onclick = () => {
+          portfolioMap.fitBounds(poly.getBounds(), {
+            padding: [20, 20],
+          });
+          poly.openPopup();
+        };
+        listEl.appendChild(div);
+      }
 
-			// --- CATCHMENT LOGIC ---
-			// (Lock evaluation logic removed as catchment is own-sites only)
+      // --- CATCHMENT LOGIC ---
+      // (Lock evaluation logic removed as catchment is own-sites only)
 
-			let catchmentMap = null;
-			let catchmentBaseLayerGroup = null; // Site polygon + buffer
-			let catchmentEncumbranceLayerGroup = null; // Encumbrances
+      let catchmentMap = null;
+      let catchmentBaseLayerGroup = null; // Site polygon + buffer
+      let catchmentEncumbranceLayerGroup = null; // Encumbrances
 
-			// In-memory store of user-selected local geojson layers.
-			// Keyed by a normalized name so we can match against expected layer types.
-			const loadedLayers = {}; // normalizedName -> parsed GeoJSON
+      // In-memory store of user-selected local geojson layers.
+      // Keyed by a normalized name so we can match against expected layer types.
+      const loadedLayers = {}; // normalizedName -> parsed GeoJSON
 
-			// Expected layers and how to display them. `match` is used to find the
-			// best-fitting loaded file for each layer (case/space/underscore-insensitive,
-			// substring match) so it works regardless of exact filename.
-			const LAYER_DEFINITIONS = [
-				{
-					match: "protectedarea",
-					name: "Protected Area",
-					type: "Polygon",
-					color: "#84cc16",
-				},
-				{
-					match: "placeofworship",
-					name: "Place Of Worship",
-					type: "Point",
-					color: "#f59e0b",
-				},
-				{ match: "road", name: "Road", type: "Line", color: "#ef4444" },
-				{
-					match: "waterbodies1",
-					name: "Water Bodies 1",
-					type: "Polygon",
-					color: "#06b6d4",
-				},
-				{
-					match: "waterbodies2",
-					name: "Water Bodies 2",
-					type: "Polygon",
-					color: "#0ea5e9",
-				},
-				{
-					match: "powerpoles",
-					name: "Power Poles",
-					type: "Point",
-					color: "#eab308",
-				},
-				{
-					match: "powerline",
-					name: "Power Line",
-					type: "Line",
-					color: "#f43f5e",
-				},
-				{
-					match: "powersubstation",
-					name: "Power Substation",
-					type: "Point",
-					color: "#a855f7",
-				},
-			];
+      // Expected layers and how to display them. `match` is used to find the
+      // best-fitting loaded file for each layer (case/space/underscore-insensitive,
+      // substring match) so it works regardless of exact filename.
+      const LAYER_DEFINITIONS = [
+        {
+          match: "protectedarea",
+          name: "Protected Area",
+          type: "Polygon",
+          color: "#84cc16",
+        },
+        {
+          match: "placeofworship",
+          name: "Place Of Worship",
+          type: "Point",
+          color: "#f59e0b",
+        },
+        { match: "road", name: "Road", type: "Line", color: "#ef4444" },
+        {
+          match: "waterbodies1",
+          name: "Water Bodies 1",
+          type: "Polygon",
+          color: "#06b6d4",
+        },
+        {
+          match: "waterbodies2",
+          name: "Water Bodies 2",
+          type: "Polygon",
+          color: "#0ea5e9",
+        },
+        {
+          match: "powerpoles",
+          name: "Power Poles",
+          type: "Point",
+          color: "#eab308",
+        },
+        {
+          match: "powerline",
+          name: "Power Line",
+          type: "Line",
+          color: "#f43f5e",
+        },
+        {
+          match: "powersubstation",
+          name: "Power Substation",
+          type: "Point",
+          color: "#a855f7",
+        },
+      ];
 
-			const layerVisibility = {};
-			LAYER_DEFINITIONS.forEach(def => layerVisibility[def.name] = true);
-			let lastScanResults = { bufferRadius: 10, layers: {} };
+      const layerVisibility = {};
+      LAYER_DEFINITIONS.forEach((def) => (layerVisibility[def.name] = true));
+      let lastScanResults = { bufferRadius: 10, layers: {} };
 
-			function normalizeLayerKey(str) {
-				return str
-					.toLowerCase()
-					.replace(/\.(geojson|json)$/i, "")
-					.replace(/[\s_\-]+/g, "");
-			}
+      function normalizeLayerKey(str) {
+        return str
+          .toLowerCase()
+          .replace(/\.(geojson|json)$/i, "")
+          .replace(/[\s_\-]+/g, "");
+      }
 
-			async function fetchLayersFromBackend() {
-				const statusEl = document.getElementById("layerFileStatus");
-				statusEl.innerHTML = `<span class="text-purple-600 font-semibold flex items-center gap-1.5">
+      async function fetchLayersFromBackend() {
+        const statusEl = document.getElementById("layerFileStatus");
+        statusEl.innerHTML = `<span class="text-purple-600 font-semibold flex items-center gap-1.5">
 					<svg class="animate-spin w-3 h-3" viewBox="0 0 24 24" fill="none">
 						<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
 						<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
@@ -1985,14 +1815,14 @@
 					Connecting to backend...
 				</span>`;
 
-				try {
-					const response = await fetch("http://127.0.0.1:5000/api/layers");
-					if (!response.ok) throw new Error("Failed to fetch layers list");
-					const files = await response.json();
+        try {
+          const response = await fetch("http://127.0.0.1:5000/api/layers");
+          if (!response.ok) throw new Error("Failed to fetch layers list");
+          const files = await response.json();
 
-					for (let i = 0; i < files.length; i++) {
-						const file = files[i];
-						statusEl.innerHTML = `<span class="text-purple-600 font-semibold flex items-center gap-1.5">
+          for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            statusEl.innerHTML = `<span class="text-purple-600 font-semibold flex items-center gap-1.5">
 							<svg class="animate-spin w-3 h-3" viewBox="0 0 24 24" fill="none">
 								<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
 								<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
@@ -2000,776 +1830,783 @@
 							Downloading ${file} (${i + 1}/${files.length})…
 						</span>`;
 
-						const layerRes = await fetch(`http://127.0.0.1:5000/api/layer/${encodeURIComponent(file)}`);
-						if (layerRes.ok) {
-							const parsed = await layerRes.json();
-							const key = normalizeLayerKey(file);
-							loadedLayers[key] = slimFeatureCollection(parsed);
-						} else {
-							console.warn("Could not download " + file);
-							loadedLayers[normalizeLayerKey(file)] = {
-								__error: true,
-							};
-						}
-					}
-					renderLayerStatus();
-				} catch (err) {
-					console.error(err);
-					statusEl.innerHTML = `<span class="text-red-600 font-semibold">Backend connection failed. Ensure app.py is running.</span>`;
-				}
-			}
-
-			// Keeps only geometry + a display name per feature. Files like
-			// place_of_worship / powerpoles carry dozens of unused OSM tags per
-			// feature — dropping them cuts memory and later loop time substantially.
-			function slimFeatureCollection(geojson) {
-				if (!geojson || !Array.isArray(geojson.features))
-					return geojson;
-				return {
-					type: "FeatureCollection",
-					features: geojson.features.map((f) => {
-						const p = f.properties || {};
-						return {
-							type: "Feature",
-							geometry: f.geometry,
-							properties: {
-								name:
-									p.name ||
-									p.amenity ||
-									p.power ||
-									p.highway ||
-									"",
-							},
-						};
-					}),
-				};
-			}
-
-			function renderLayerStatus() {
-				const statusEl = document.getElementById("layerFileStatus");
-				statusEl.innerHTML = "";
-				LAYER_DEFINITIONS.forEach((def) => {
-					const found = Object.keys(loadedLayers).find((k) =>
-						k.includes(def.match),
-					);
-					const ok = found && !loadedLayers[found].__error;
-					const pill = document.createElement("span");
-					pill.className = ok
-						? "bg-green-50 text-green-700 border border-green-200 px-2 py-1 rounded-full flex items-center gap-1"
-						: "bg-slate-100 text-slate-400 border border-slate-200 px-2 py-1 rounded-full flex items-center gap-1";
-					pill.innerHTML = `<span class="w-1.5 h-1.5 rounded-full" style="background:${ok ? def.color : "#cbd5e1"}"></span>${def.name}${ok ? "" : " (not loaded)"}`;
-					statusEl.appendChild(pill);
-				});
-			}
-			// Render initial (empty) status so the panel isn't blank on load
-			document.addEventListener("DOMContentLoaded", () => {
-				renderLayerStatus();
-				renderLayerToggles();
-			});
-
-			async function runCatchmentAnalysis() {
-				const selector = document.getElementById(
-					"catchmentAssetSelector",
-				);
-				const selectedSiteId = selector ? selector.value : null;
-				const activeSite = siteData[selectedSiteId] || {
-					name: "Alpha Hub",
-				};
-				const bufferRadius = parseFloat(
-					document.getElementById("catchmentBuffer")?.value || 10,
-				);
-
-				// Show the active container
-				const activeContainer = document.getElementById(
-					"catchmentActiveContainer",
-				);
-				if (activeContainer) activeContainer.classList.remove("hidden");
-
-				// Update the display names
-				const canvasText = document.getElementById(
-					"catchmentCanvasText",
-				);
-				if (canvasText) {
-					canvasText.innerText = `ST_DWithin processing via loaded GeoJSON layers for ${activeSite.name}.`;
-				}
-
-				// Simulate processing state
-				const overlay = document.getElementById("catchmentMapOverlay");
-				if (overlay) {
-					// start animating out
-					setTimeout(() => {
-						overlay.style.opacity = "0";
-						setTimeout(() => {
-							overlay.style.display = "none";
-							if (catchmentMap) catchmentMap.invalidateSize();
-						}, 500);
-					}, 1000);
-				}
-
-				// Map init
-				if (!catchmentMap) {
-					catchmentMap = L.map("catchmentMap", {
-						zoomControl: true,
-						scrollWheelZoom: true,
-					});
-					L.tileLayer(
-						"https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
-						{
-							attribution: "© OpenStreetMap contributors © CARTO",
-							maxZoom: 19,
-						},
-					).addTo(catchmentMap);
-					catchmentBaseLayerGroup = L.layerGroup().addTo(catchmentMap);
-					catchmentEncumbranceLayerGroup = L.layerGroup().addTo(catchmentMap);
-				}
-				catchmentBaseLayerGroup.clearLayers();
-
-				// Force redraw since container might have changed size
-				setTimeout(() => catchmentMap.invalidateSize(), 100);
-
-				let center = [12.931343, 80.137158]; // fallback
-				let sitePoly = sitePolygons[selectedSiteId];
-				if (sitePoly) {
-					const geo = sitePoly.geo;
-					let coords;
-					if (geo.type === "MultiPolygon") {
-						coords = geo.coordinates.map((poly) =>
-							poly[0].map((c) => [c[1], c[0]]),
-						);
-					} else {
-						coords = geo.coordinates[0].map((c) => [c[1], c[0]]);
-					}
-					const poly = L.polygon(coords, {
-						color: "#7c3aed",
-						fillColor: "#7c3aed",
-						fillOpacity: 0.3,
-						weight: 2,
-					});
-					poly.bindTooltip(activeSite.name, {
-						permanent: false,
-						sticky: true,
-					});
-					poly.addTo(catchmentBaseLayerGroup);
-
-					catchmentMap.fitBounds(poly.getBounds(), {
-						padding: [40, 40],
-					});
-					center = poly.getBounds().getCenter();
-				} else {
-					catchmentMap.setView(center, 12);
-				}
-
-				// Draw Buffer
-				L.circle(center, {
-					radius: bufferRadius * 1000,
-					color: "#94a3b8",
-					weight: 1,
-					fillColor: "#f1f5f9",
-					fillOpacity: 0.2,
-					dashArray: "5, 5",
-				}).addTo(catchmentBaseLayerGroup);
-
-				scanLoadedEncumbrances(center, bufferRadius);
-			}
-
-			// Scan the layers the user picked via the file input and cache real location intersections
-			function scanLoadedEncumbrances(center, bufferRadius) {
-				lastScanResults = {
-					bufferRadius: bufferRadius,
-					layers: {}
-				};
-
-				LAYER_DEFINITIONS.forEach((def) => {
-					lastScanResults.layers[def.name] = {
-						def: def,
-						features: []
-					};
-
-					const foundKey = Object.keys(loadedLayers).find((k) =>
-						k.includes(def.match),
-					);
-					if (!foundKey) return;
-					const data = loadedLayers[foundKey];
-					if (!data || data.__error || !data.features) return;
-
-					data.features.forEach((f) => {
-						if (!f.geometry || !f.geometry.coordinates) return;
-
-						// Get a sample coordinate
-						let coords = f.geometry.coordinates;
-						while (Array.isArray(coords[0])) {
-							coords = coords[0];
-						}
-
-						const lat = coords[1];
-						const lng = coords[0];
-
-						if (lat && lng && center) {
-							const cLat = center.lat || center[0];
-							const cLng = center.lng || center[1];
-
-							// approx distance in km
-							const dLat = (lat - cLat) * 111;
-							const dLng =
-								(lng - cLng) *
-								111 *
-								Math.cos((cLat * Math.PI) / 180);
-							const dist = Math.sqrt(dLat * dLat + dLng * dLng);
-
-							// Real-location mode strict — only features genuinely within the buffer.
-							const withinRadius = dist <= bufferRadius;
-
-							if (withinRadius) {
-								lastScanResults.layers[def.name].features.push({
-									feature: f,
-									dist: dist
-								});
-							}
-						}
-					});
-				});
-
-				redrawEncumbranceLayers();
-			}
-
-			function toggleLayerVisibility(layerName) {
-				layerVisibility[layerName] = !layerVisibility[layerName];
-				redrawEncumbranceLayers();
-			}
-
-			function redrawEncumbranceLayers() {
-				if (!catchmentEncumbranceLayerGroup) return;
-				catchmentEncumbranceLayerGroup.clearLayers();
-
-				const encumbranceList = [];
-				let totalIntersections = 0;
-
-				LAYER_DEFINITIONS.forEach((def) => {
-					const layerData = lastScanResults.layers[def.name];
-					if (!layerData) return;
-					
-					const hitCount = layerData.features.length;
-					
-					if (hitCount > 0 && layerVisibility[def.name]) {
-						let renderedCount = 0;
-						layerData.features.forEach((item) => {
-							if (renderedCount < 50) {
-								const style = {
-									color: def.color,
-									weight: def.type === "Line" ? 3 : 1,
-									fillColor: def.color,
-									fillOpacity: 0.5,
-								};
-								let displayGeo = JSON.parse(
-									JSON.stringify(item.feature),
-								);
-
-								L.geoJSON(displayGeo, {
-									style: style,
-									pointToLayer: function (feature, latlng) {
-										return L.circleMarker(latlng, {
-											radius: 5,
-											fillColor: def.color,
-											color: "#fff",
-											weight: 1,
-											opacity: 1,
-											fillOpacity: 0.8,
-										});
-									},
-								})
-									.bindTooltip(
-										def.name +
-											(item.feature.properties &&
-											item.feature.properties.name
-												? ": " + item.feature.properties.name
-												: ""),
-										{
-											className: "custom-map-tooltip",
-											sticky: true,
-										},
-									)
-									.addTo(catchmentEncumbranceLayerGroup);
-								renderedCount++;
-							}
-						});
-					}
-
-					// We include all layers that have hits in the list even if hidden, 
-					// wait no - if we hide it, we shouldn't show it in the count, or should we?
-					// Let's only include visible ones in the encumbranceList for the panel count:
-					if (hitCount > 0 && layerVisibility[def.name]) {
-						encumbranceList.push({
-							name: def.name,
-							type: def.type,
-							color: def.color,
-							hitCount: hitCount,
-						});
-						totalIntersections += hitCount;
-					}
-				});
-
-				renderEncumbranceSidebar(
-					encumbranceList,
-					totalIntersections,
-					Object.keys(loadedLayers).length === 0 ? "empty" : "normal",
-					lastScanResults.bufferRadius,
-				);
-				
-				renderLayerToggles();
-			}
-
-			function renderLayerToggles() {
-				const container = document.getElementById("catchmentLayerToggles");
-				if (!container) return;
-				container.innerHTML = "";
-				
-				let hasData = false;
-				LAYER_DEFINITIONS.forEach(def => {
-					const layerData = lastScanResults.layers ? lastScanResults.layers[def.name] : null;
-					// Show toggle if it has at least 1 hit, or always show?
-					// We'll show all layer definitions always, like a legend.
-					
-					const wrap = document.createElement("label");
-					wrap.className = "flex items-center gap-2 cursor-pointer py-1";
-					
-					const box = document.createElement("div");
-					box.className = "w-3 h-3 rounded-sm flex-shrink-0 border";
-					box.style.backgroundColor = layerVisibility[def.name] ? def.color : "transparent";
-					box.style.borderColor = def.color;
-					
-					const input = document.createElement("input");
-					input.type = "checkbox";
-					input.className = "hidden";
-					input.checked = layerVisibility[def.name];
-					input.onchange = () => toggleLayerVisibility(def.name);
-					
-					const text = document.createElement("span");
-					text.className = layerVisibility[def.name] ? "text-slate-800" : "text-slate-400";
-					
-					let countText = "";
-					if (layerData && layerData.features.length > 0) {
-						countText = ` (${layerData.features.length})`;
-					}
-					text.innerText = def.name + countText;
-					
-					wrap.appendChild(input);
-					wrap.appendChild(box);
-					wrap.appendChild(text);
-					container.appendChild(wrap);
-					hasData = true;
-				});
-				
-				if (!hasData) {
-					container.innerHTML = "<div class='text-slate-400 italic'>No layers</div>";
-				}
-			}
-
-			// Updates the Encumbrances / Intersections sidebar panels.
-			// mode: "normal" | "empty" (no layers loaded) | "hidden" (toggle switched off)
-			function renderEncumbranceSidebar(
-				encumbranceList,
-				totalIntersections,
-				mode,
-				bufferRadius,
-			) {
-				const encTitles = Array.from(
-					document.querySelectorAll("h4"),
-				).filter((el) => el.textContent.includes("Encumbrances"));
-				if (encTitles.length > 0) {
-					const container = encTitles[0].nextElementSibling;
-					if (container) {
-						container.innerHTML = "";
-						if (mode === "hidden") {
-							container.innerHTML =
-								'<div class="text-xs text-slate-500 italic p-2">Catchment layers hidden — enable the checkbox above to show them.</div>';
-						} else if (mode === "empty") {
-							container.innerHTML =
-								'<div class="text-xs text-amber-600 italic p-2">No layers loaded yet — use "Select .geojson files" above.</div>';
-						} else if (encumbranceList.length === 0) {
-							container.innerHTML =
-								'<div class="text-xs text-slate-500 italic p-2">No encumbrances found in radius.</div>';
-						} else {
-							encumbranceList.forEach((enc) => {
-								const div = document.createElement("div");
-								div.className =
-									"flex justify-between items-center bg-white p-2 rounded border border-slate-100 mb-2";
-								div.innerHTML = `<div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full inline-block" style="background-color: ${enc.color}"></span><span class="text-xs font-semibold text-slate-700 truncate" style="max-width: 110px;" title="${enc.name}">${enc.name}</span></div><div class="flex items-center gap-3"><span class="text-[10px] text-slate-400">${enc.hitCount.toLocaleString()} hits</span></div>`;
-								container.appendChild(div);
-							});
-						}
-					}
-				}
-
-				const intTitles = Array.from(
-					document.querySelectorAll("h4"),
-				).filter((el) => el.textContent.includes("Intersections"));
-				if (intTitles.length > 0) {
-					const intContainer = intTitles[0].nextElementSibling;
-					if (intContainer) {
-						intContainer.innerHTML =
-							mode === "hidden"
-								? '<span class="text-slate-400 italic">Layers hidden</span>'
-								: `<span class="text-slate-900 font-bold">${totalIntersections.toLocaleString()} actual geometries intersected within ${bufferRadius} km</span>`;
-					}
-				}
-			}
-
-			// --- CONSTRUCTION ANALYSIS RUN ---
-
-			function getSelectedSites() {
-				let selected = [siteData.alpha]; // Always include primary target
-
-				// Get checked competitors
-				document
-					.querySelectorAll(".comp-check:checked")
-					.forEach((cb) => {
-						if (siteData[cb.value])
-							selected.push(siteData[cb.value]);
-					});
-				return selected;
-			}
-
-			// ── REAL CONSTRUCTION DATA (from multi_site_construction_metrics.html + Layers/) ──
-			const CONSTRUCTION_DATA = {
-				SITE01: {
-					name: "AlphaOne",
-					color: "#f97316",
-					ns: [100, 100, 99, 100, 100, 100, 99, 53, 44, 9],
-					uc: [0, 0, 1, 0, 0, 0, 1, 46, 56, 64],
-					co: [0, 0, 0, 0, 0, 0, 0, 0, 0, 28],
-				},
-				SITE02: {
-					name: "Ascendes",
-					color: "#f97316",
-					ns: [65, 55, 58, 48, 54, 26, 52, 15, 23, 16],
-					uc: [22, 32, 28, 36, 22, 48, 19, 56, 45, 47],
-					co: [14, 12, 14, 15, 24, 26, 29, 29, 32, 38],
-				},
-				SITE03: {
-					name: "ESR",
-					color: "#f97316",
-					ns: [90, 88, 86, 64, 68, 57, 44, 24, 11, 8],
-					uc: [8, 6, 8, 30, 19, 24, 33, 46, 57, 61],
-					co: [1, 6, 6, 6, 13, 18, 22, 31, 32, 31],
-				},
-				SITE04: {
-					name: "EndoSpace",
-					color: "#f97316",
-					ns: [99, 49, 38, 35, 37, 33, 8, 5, 5, 4],
-					uc: [1, 51, 58, 49, 46, 47, 69, 67, 55, 50],
-					co: [0, 0, 4, 15, 17, 20, 23, 28, 40, 47],
-				},
-				SITE05: {
-					name: "Vengudi",
-					color: "#7c3aed",
-					ns: [100, 100, 98, 99, 98, 98, 92, 98, 99, 62],
-					uc: [0, 0, 2, 1, 2, 2, 5, 2, 0, 38],
-					co: [0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
-				},
-			};
-			const PERIOD_LABELS = [
-				"T01",
-				"T02",
-				"T03",
-				"T04",
-				"T05",
-				"T06",
-				"T07",
-				"T08",
-				"T09",
-				"T10",
-			];
-
-			function runConstructionAnalysis() {
-				// Keep period labels static based on data
-				let periods = PERIOD_LABELS;
-
-				appState.generatedPeriods = periods;
-				appState.analysisTo = periods.length - 1;
-				document
-					.getElementById("compDropdown")
-					.classList.remove("show");
-
-				// Build active site list based on selectors
-				const selectedKeys = [];
-
-				// Get Primary Target
-				const primarySelect = document.getElementById("primaryTarget");
-				let primaryId = primarySelect ? primarySelect.value : "SITE01";
-
-				// Map known static IDs for backwards compatibility if needed
-				const legacyMap = {
-					alpha: "SITE01",
-					beta: "SITE02",
-					gamma: "SITE03",
-					delta: "SITE04",
-					sigma: "SITE05",
-				};
-				if (legacyMap[primaryId]) primaryId = legacyMap[primaryId];
-				selectedKeys.push(primaryId);
-
-				// Get checked competitors
-				document
-					.querySelectorAll(".comp-check:checked")
-					.forEach((cb) => {
-						let compId = cb.value;
-						if (legacyMap[compId]) compId = legacyMap[compId];
-						selectedKeys.push(compId);
-					});
-
-				const activeSites = selectedKeys
-					.map((k) => {
-						if (CONSTRUCTION_DATA[k]) return { ...CONSTRUCTION_DATA[k], id: k };
-						return null;
-					})
-					.filter(Boolean);
-
-				// Populate map site selector
-				const mapSelector = document.getElementById("mapTargetSite");
-				mapSelector.innerHTML = "";
-				activeSites.forEach((s) => {
-					const opt = document.createElement("option");
-					opt.value = s.id;
-					opt.textContent = s.name;
-					mapSelector.appendChild(opt);
-				});
-				mapSelector.onchange = () => updateLayerInfo();
-				updateLayerInfo();
-
-				document.getElementById("barChartSub").innerText =
-					`Structural Balance at ${periods[periods.length - 1]}`;
-				document.getElementById("lineChartSub").innerText =
-					`CO% Trajectory — ${periods[0]} → ${periods[periods.length - 1]}`;
-
-				updateChartsData(activeSites, periods);
-			}
-
-			function updateLayerInfo() {
-				const mapSelector = document.getElementById("mapTargetSite");
-				const mapText = document.getElementById("mapOverlayText");
-				const placeholder = document.getElementById("mapPlaceholder");
-				if (!mapSelector.options.length) return;
-
-				const siteKeyMap = {
-					AlphaOne: "SITE01",
-					Ascendes: "SITE02",
-					ESR: "SITE03",
-					EndoSpace: "SITE04",
-					Vengudi: "SITE05",
-				};
-				const siteName =
-					mapSelector.options[mapSelector.selectedIndex].text;
-				const siteKey = siteKeyMap[siteName] || "SITE01";
-				const periods = appState.generatedPeriods || PERIOD_LABELS;
-				const lastTid = periods[periods.length - 1].split(" ")[0]; // e.g. "T10"
-				const mode = appState.layerMode || "rgb";
-				const layerFile =
-					mode === "rgb"
-						? `Layers/${siteKey}_${lastTid}_RGB.tif`
-						: `Layers/${siteKey}_${lastTid}_Classification_with_Polygon.tif`;
-
-				mapText.innerHTML = `<span class="font-semibold">${siteName} — ${lastTid}</span><br>
-                <span class="text-xs text-slate-500">📁 ${layerFile}</span>`;
-				placeholder.classList.remove("hidden");
-			}
-
-			function setLayer(mode) {
-				appState.layerMode = mode;
-				const rgbBtn = document.getElementById("btnMapRGB");
-				const classBtn = document.getElementById("btnMapClass");
-				const mapCanvas = document.getElementById("mapCanvas");
-				const mapPattern = document.getElementById("mapPattern");
-
-				updateMapText();
-
-				if (mode === "rgb") {
-					rgbBtn.className =
-						"px-3 py-1.5 text-[11px] font-semibold rounded shadow-sm bg-white text-purple-900 transition";
-					classBtn.className =
-						"px-3 py-1.5 text-[11px] font-semibold rounded text-slate-500 hover:text-purple-900 transition";
-					mapCanvas.style.backgroundColor = "#4f772d";
-					mapPattern.style.backgroundImage =
-						"radial-gradient(#31572c 2px, transparent 2px)";
-				} else {
-					classBtn.className =
-						"px-3 py-1.5 text-[11px] font-semibold rounded shadow-sm bg-white text-purple-900 transition";
-					rgbBtn.className =
-						"px-3 py-1.5 text-[11px] font-semibold rounded text-slate-500 hover:text-purple-900 transition";
-					mapCanvas.style.backgroundColor = "#b5179e";
-					mapPattern.style.backgroundImage =
-						"linear-gradient(45deg, #7209b7 25%, transparent 25%)";
-				}
-			}
-
-			function updateMapText() {
-				const mapSelector = document.getElementById("mapTargetSite");
-				const placeholder = document.getElementById(
-					"mapPlaceholderText",
-				);
-				const mapText = document.getElementById("mapCanvasText");
-
-				if (mapSelector.options.length === 0) {
-					placeholder.classList.remove("hidden");
-					mapText.innerHTML = "";
-					return;
-				}
-
-				const siteName =
-					mapSelector.options[mapSelector.selectedIndex].text;
-				const siteKey = mapSelector.options[mapSelector.selectedIndex].value;
-				const periods = appState.generatedPeriods || PERIOD_LABELS;
-				const lastTid = periods[periods.length - 1].split(" ")[0]; // e.g. "T10"
-				const mode = appState.layerMode || "rgb";
-				const layerFile =
-					mode === "rgb"
-						? `Layers/${siteKey}_${lastTid}_RGB.tif`
-						: `Layers/${siteKey}_${lastTid}_Classification_with_Polygon.tif`;
-
-				mapText.innerHTML = `<span class="font-semibold">${siteName} — ${lastTid}</span><br>
-                <span class="text-xs text-slate-500">📁 ${layerFile}</span>`;
-				placeholder.classList.remove("hidden");
-			}
-
-				if (appState.layerMode === "rgb") {
-					mapText.innerText = `EE RGB Layer - ${siteName} (${pStr})`;
-				} else {
-					mapText.innerText = `Classification Model - ${siteName} (${pStr})`;
-				}
-			}
-
-			// --- CHART.JS INTEGRATION ---
-
-			function initCharts() {
-				Chart.defaults.font.family = "'Inter', sans-serif";
-				Chart.defaults.color = "#64748b";
-
-				// 1. Line Chart (Completion Rate CO% over sliced time)
-				const ctxLine = document
-					.getElementById("lineChartCompletion")
-					.getContext("2d");
-				lineChart = new Chart(ctxLine, {
-					type: "line",
-					data: { labels: [], datasets: [] },
-					options: {
-						responsive: true,
-						maintainAspectRatio: false,
-						plugins: {
-							legend: {
-								position: "top",
-								align: "end",
-								labels: { boxWidth: 12, usePointStyle: true },
-							},
-						},
-						scales: {
-							y: {
-								max: 100,
-								min: 0,
-								grid: { color: "#f1f5f9" },
-								ticks: { callback: (v) => v + "%" },
-							},
-							x: { grid: { display: false } },
-						},
-						interaction: { mode: "index", intersect: false },
-					},
-				});
-
-				// 2. Bar Chart (Stacked NS, UC, CO for 'To' period)
-				const ctxBar = document
-					.getElementById("barChartStatus")
-					.getContext("2d");
-				barChart = new Chart(ctxBar, {
-					type: "bar",
-					data: { labels: [], datasets: [] },
-					options: {
-						responsive: true,
-						maintainAspectRatio: false,
-						plugins: {
-							legend: { display: false },
-							tooltip: { mode: "index" },
-						},
-						scales: {
-							x: { stacked: true, grid: { display: false } },
-							y: {
-								stacked: true,
-								max: 100,
-								grid: { color: "#f1f5f9" },
-								ticks: { callback: (v) => v + "%" },
-							},
-						},
-					},
-				});
-			}
-
-			function getInterpolatedData(originalArray, newLength) {
-				if (newLength === 1) return [originalArray[9]];
-				let result = [];
-				for (let i = 0; i < newLength; i++) {
-					let idx = Math.floor((i / (newLength - 1)) * 9);
-					result.push(originalArray[idx]);
-				}
-				return result;
-			}
-
-			function updateChartsData(activeSites, periods) {
-				let numPeriods = periods.length;
-
-				// 1. Update Line Chart
-				lineChart.data.labels = periods;
-				lineChart.data.datasets = activeSites.map((site) => ({
-					label: site.name.split(" ")[0],
-					data: getInterpolatedData(site.co, numPeriods),
-					borderColor: site.color,
-					backgroundColor: site.color,
-					borderWidth: 2,
-					pointRadius: 4,
-					tension: 0.3,
-				}));
-				lineChart.update();
-
-				// 2. Update Bar Chart
-				barChart.data.labels = activeSites.map(
-					(s) => s.name.split(" ")[0],
-				);
-				barChart.data.datasets = [
-					{
-						label: "Completed (CO)",
-						data: activeSites.map(
-							(s) =>
-								getInterpolatedData(s.co, numPeriods)[
-									numPeriods - 1
-								],
-						),
-						backgroundColor: "#5BAA68",
-						borderRadius: 4,
-						barPercentage: 0.6,
-					},
-					{
-						label: "Under Const. (UC)",
-						data: activeSites.map(
-							(s) =>
-								getInterpolatedData(s.uc, numPeriods)[
-									numPeriods - 1
-								],
-						),
-						backgroundColor: "#E8903A",
-						borderRadius: 4,
-						barPercentage: 0.6,
-					},
-					{
-						label: "Not Started (NS)",
-						data: activeSites.map(
-							(s) =>
-								getInterpolatedData(s.ns, numPeriods)[
-									numPeriods - 1
-								],
-						),
-						backgroundColor: "#BFBDB5",
-						borderRadius: 4,
-						barPercentage: 0.6,
-					},
-				];
-				barChart.update();
-			}
-		</script>
-	</body>
+            const layerRes = await fetch(
+              `http://127.0.0.1:5000/api/layer/${encodeURIComponent(file)}`,
+            );
+            if (layerRes.ok) {
+              const parsed = await layerRes.json();
+              const key = normalizeLayerKey(file);
+              loadedLayers[key] = slimFeatureCollection(parsed);
+            } else {
+              console.warn("Could not download " + file);
+              loadedLayers[normalizeLayerKey(file)] = {
+                __error: true,
+              };
+            }
+          }
+          renderLayerStatus();
+        } catch (err) {
+          console.error(err);
+          statusEl.innerHTML = `<span class="text-red-600 font-semibold">Backend connection failed. Ensure app.py is running.</span>`;
+        }
+      }
+
+      // Keeps only geometry + a display name per feature. Files like
+      // place_of_worship / powerpoles carry dozens of unused OSM tags per
+      // feature — dropping them cuts memory and later loop time substantially.
+      function slimFeatureCollection(geojson) {
+        if (!geojson || !Array.isArray(geojson.features)) return geojson;
+        return {
+          type: "FeatureCollection",
+          features: geojson.features.map((f) => {
+            const p = f.properties || {};
+            return {
+              type: "Feature",
+              geometry: f.geometry,
+              properties: {
+                name: p.name || p.amenity || p.power || p.highway || "",
+              },
+            };
+          }),
+        };
+      }
+
+      function renderLayerStatus() {
+        const statusEl = document.getElementById("layerFileStatus");
+        statusEl.innerHTML = "";
+        LAYER_DEFINITIONS.forEach((def) => {
+          const found = Object.keys(loadedLayers).find((k) =>
+            k.includes(def.match),
+          );
+          const ok = found && !loadedLayers[found].__error;
+          const pill = document.createElement("span");
+          pill.className = ok
+            ? "bg-green-50 text-green-700 border border-green-200 px-2 py-1 rounded-full flex items-center gap-1"
+            : "bg-slate-100 text-slate-400 border border-slate-200 px-2 py-1 rounded-full flex items-center gap-1";
+          pill.innerHTML = `<span class="w-1.5 h-1.5 rounded-full" style="background:${ok ? def.color : "#cbd5e1"}"></span>${def.name}${ok ? "" : " (not loaded)"}`;
+          statusEl.appendChild(pill);
+        });
+      }
+      // Render initial (empty) status so the panel isn't blank on load
+      document.addEventListener("DOMContentLoaded", () => {
+        renderLayerStatus();
+        renderLayerToggles();
+      });
+
+      async function runCatchmentAnalysis() {
+        const selector = document.getElementById("catchmentAssetSelector");
+        const selectedSiteId = selector ? selector.value : null;
+        const activeSite = siteData[selectedSiteId] || {
+          name: "Alpha Hub",
+        };
+        const bufferRadius = parseFloat(
+          document.getElementById("catchmentBuffer")?.value || 10,
+        );
+
+        // Show the active container
+        const activeContainer = document.getElementById(
+          "catchmentActiveContainer",
+        );
+        if (activeContainer) activeContainer.classList.remove("hidden");
+
+        // Update the display names
+        const canvasText = document.getElementById("catchmentCanvasText");
+        if (canvasText) {
+          canvasText.innerText = `ST_DWithin processing via loaded GeoJSON layers for ${activeSite.name}.`;
+        }
+
+        // Simulate processing state
+        const overlay = document.getElementById("catchmentMapOverlay");
+        if (overlay) {
+          // start animating out
+          setTimeout(() => {
+            overlay.style.opacity = "0";
+            setTimeout(() => {
+              overlay.style.display = "none";
+              if (catchmentMap) catchmentMap.invalidateSize();
+            }, 500);
+          }, 1000);
+        }
+
+        // Map init
+        if (!catchmentMap) {
+          catchmentMap = L.map("catchmentMap", {
+            zoomControl: true,
+            scrollWheelZoom: true,
+          });
+          L.tileLayer(
+            "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+            {
+              attribution: "© OpenStreetMap contributors © CARTO",
+              maxZoom: 19,
+            },
+          ).addTo(catchmentMap);
+          catchmentBaseLayerGroup = L.layerGroup().addTo(catchmentMap);
+          catchmentEncumbranceLayerGroup = L.layerGroup().addTo(catchmentMap);
+        }
+        catchmentBaseLayerGroup.clearLayers();
+
+        // Force redraw since container might have changed size
+        setTimeout(() => catchmentMap.invalidateSize(), 100);
+
+        let center = [12.931343, 80.137158]; // fallback
+        let sitePoly = sitePolygons[selectedSiteId];
+        if (sitePoly) {
+          const geo = sitePoly.geo;
+          let coords;
+          if (geo.type === "MultiPolygon") {
+            coords = geo.coordinates.map((poly) =>
+              poly[0].map((c) => [c[1], c[0]]),
+            );
+          } else {
+            coords = geo.coordinates[0].map((c) => [c[1], c[0]]);
+          }
+          const poly = L.polygon(coords, {
+            color: "#7c3aed",
+            fillColor: "#7c3aed",
+            fillOpacity: 0.3,
+            weight: 2,
+          });
+          poly.bindTooltip(activeSite.name, {
+            permanent: false,
+            sticky: true,
+          });
+          poly.addTo(catchmentBaseLayerGroup);
+
+          catchmentMap.fitBounds(poly.getBounds(), {
+            padding: [40, 40],
+          });
+          center = poly.getBounds().getCenter();
+        } else {
+          catchmentMap.setView(center, 12);
+        }
+
+        // Draw Buffer
+        L.circle(center, {
+          radius: bufferRadius * 1000,
+          color: "#94a3b8",
+          weight: 1,
+          fillColor: "#f1f5f9",
+          fillOpacity: 0.2,
+          dashArray: "5, 5",
+        }).addTo(catchmentBaseLayerGroup);
+
+        scanLoadedEncumbrances(center, bufferRadius);
+      }
+
+      // Scan the layers the user picked via the file input and cache real location intersections
+      function scanLoadedEncumbrances(center, bufferRadius) {
+        lastScanResults = {
+          bufferRadius: bufferRadius,
+          layers: {},
+        };
+
+        LAYER_DEFINITIONS.forEach((def) => {
+          lastScanResults.layers[def.name] = {
+            def: def,
+            features: [],
+          };
+
+          const foundKey = Object.keys(loadedLayers).find((k) =>
+            k.includes(def.match),
+          );
+          if (!foundKey) return;
+          const data = loadedLayers[foundKey];
+          if (!data || data.__error || !data.features) return;
+
+          data.features.forEach((f) => {
+            if (!f.geometry || !f.geometry.coordinates) return;
+
+            // Get a sample coordinate
+            let coords = f.geometry.coordinates;
+            while (Array.isArray(coords[0])) {
+              coords = coords[0];
+            }
+
+            const lat = coords[1];
+            const lng = coords[0];
+
+            if (lat && lng && center) {
+              const cLat = center.lat || center[0];
+              const cLng = center.lng || center[1];
+
+              // approx distance in km
+              const dLat = (lat - cLat) * 111;
+              const dLng =
+                (lng - cLng) * 111 * Math.cos((cLat * Math.PI) / 180);
+              const dist = Math.sqrt(dLat * dLat + dLng * dLng);
+
+              // Real-location mode strict — only features genuinely within the buffer.
+              const withinRadius = dist <= bufferRadius;
+
+              if (withinRadius) {
+                lastScanResults.layers[def.name].features.push({
+                  feature: f,
+                  dist: dist,
+                });
+              }
+            }
+          });
+        });
+
+        redrawEncumbranceLayers();
+      }
+
+      function toggleLayerVisibility(layerName) {
+        layerVisibility[layerName] = !layerVisibility[layerName];
+        redrawEncumbranceLayers();
+      }
+
+      function redrawEncumbranceLayers() {
+        if (!catchmentEncumbranceLayerGroup) return;
+        catchmentEncumbranceLayerGroup.clearLayers();
+
+        const encumbranceList = [];
+        let totalIntersections = 0;
+
+        LAYER_DEFINITIONS.forEach((def) => {
+          const layerData = lastScanResults.layers[def.name];
+          if (!layerData) return;
+
+          const hitCount = layerData.features.length;
+
+          if (hitCount > 0 && layerVisibility[def.name]) {
+            let renderedCount = 0;
+            layerData.features.forEach((item) => {
+              if (renderedCount < 50) {
+                const style = {
+                  color: def.color,
+                  weight: def.type === "Line" ? 3 : 1,
+                  fillColor: def.color,
+                  fillOpacity: 0.5,
+                };
+                let displayGeo = JSON.parse(JSON.stringify(item.feature));
+
+                L.geoJSON(displayGeo, {
+                  style: style,
+                  pointToLayer: function (feature, latlng) {
+                    return L.circleMarker(latlng, {
+                      radius: 5,
+                      fillColor: def.color,
+                      color: "#fff",
+                      weight: 1,
+                      opacity: 1,
+                      fillOpacity: 0.8,
+                    });
+                  },
+                })
+                  .bindTooltip(
+                    def.name +
+                      (item.feature.properties && item.feature.properties.name
+                        ? ": " + item.feature.properties.name
+                        : ""),
+                    {
+                      className: "custom-map-tooltip",
+                      sticky: true,
+                    },
+                  )
+                  .addTo(catchmentEncumbranceLayerGroup);
+                renderedCount++;
+              }
+            });
+          }
+
+          // We include all layers that have hits in the list even if hidden,
+          // wait no - if we hide it, we shouldn't show it in the count, or should we?
+          // Let's only include visible ones in the encumbranceList for the panel count:
+          if (hitCount > 0 && layerVisibility[def.name]) {
+            encumbranceList.push({
+              name: def.name,
+              type: def.type,
+              color: def.color,
+              hitCount: hitCount,
+            });
+            totalIntersections += hitCount;
+          }
+        });
+
+        renderEncumbranceSidebar(
+          encumbranceList,
+          totalIntersections,
+          Object.keys(loadedLayers).length === 0 ? "empty" : "normal",
+          lastScanResults.bufferRadius,
+        );
+
+        renderLayerToggles();
+      }
+
+      function renderLayerToggles() {
+        const container = document.getElementById("catchmentLayerToggles");
+        if (!container) return;
+        container.innerHTML = "";
+
+        let hasData = false;
+        LAYER_DEFINITIONS.forEach((def) => {
+          const layerData = lastScanResults.layers
+            ? lastScanResults.layers[def.name]
+            : null;
+          // Show toggle if it has at least 1 hit, or always show?
+          // We'll show all layer definitions always, like a legend.
+
+          const wrap = document.createElement("label");
+          wrap.className = "flex items-center gap-2 cursor-pointer py-1";
+
+          const box = document.createElement("div");
+          box.className = "w-3 h-3 rounded-sm flex-shrink-0 border";
+          box.style.backgroundColor = layerVisibility[def.name]
+            ? def.color
+            : "transparent";
+          box.style.borderColor = def.color;
+
+          const input = document.createElement("input");
+          input.type = "checkbox";
+          input.className = "hidden";
+          input.checked = layerVisibility[def.name];
+          input.onchange = () => toggleLayerVisibility(def.name);
+
+          const text = document.createElement("span");
+          text.className = layerVisibility[def.name]
+            ? "text-slate-800"
+            : "text-slate-400";
+
+          let countText = "";
+          if (layerData && layerData.features.length > 0) {
+            countText = ` (${layerData.features.length})`;
+          }
+          text.innerText = def.name + countText;
+
+          wrap.appendChild(input);
+          wrap.appendChild(box);
+          wrap.appendChild(text);
+          container.appendChild(wrap);
+          hasData = true;
+        });
+
+        if (!hasData) {
+          container.innerHTML =
+            "<div class='text-slate-400 italic'>No layers</div>";
+        }
+      }
+
+      // Updates the Encumbrances / Intersections sidebar panels.
+      // mode: "normal" | "empty" (no layers loaded) | "hidden" (toggle switched off)
+      function renderEncumbranceSidebar(
+        encumbranceList,
+        totalIntersections,
+        mode,
+        bufferRadius,
+      ) {
+        const encTitles = Array.from(document.querySelectorAll("h4")).filter(
+          (el) => el.textContent.includes("Encumbrances"),
+        );
+        if (encTitles.length > 0) {
+          const container = encTitles[0].nextElementSibling;
+          if (container) {
+            container.innerHTML = "";
+            if (mode === "hidden") {
+              container.innerHTML =
+                '<div class="text-xs text-slate-500 italic p-2">Catchment layers hidden — enable the checkbox above to show them.</div>';
+            } else if (mode === "empty") {
+              container.innerHTML =
+                '<div class="text-xs text-amber-600 italic p-2">No layers loaded yet — use "Select .geojson files" above.</div>';
+            } else if (encumbranceList.length === 0) {
+              container.innerHTML =
+                '<div class="text-xs text-slate-500 italic p-2">No encumbrances found in radius.</div>';
+            } else {
+              encumbranceList.forEach((enc) => {
+                const div = document.createElement("div");
+                div.className =
+                  "flex justify-between items-center bg-white p-2 rounded border border-slate-100 mb-2";
+                div.innerHTML = `<div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full inline-block" style="background-color: ${enc.color}"></span><span class="text-xs font-semibold text-slate-700 truncate" style="max-width: 110px;" title="${enc.name}">${enc.name}</span></div><div class="flex items-center gap-3"><span class="text-[10px] text-slate-400">${enc.hitCount.toLocaleString()} hits</span></div>`;
+                container.appendChild(div);
+              });
+            }
+          }
+        }
+
+        const intTitles = Array.from(document.querySelectorAll("h4")).filter(
+          (el) => el.textContent.includes("Intersections"),
+        );
+        if (intTitles.length > 0) {
+          const intContainer = intTitles[0].nextElementSibling;
+          if (intContainer) {
+            intContainer.innerHTML =
+              mode === "hidden"
+                ? '<span class="text-slate-400 italic">Layers hidden</span>'
+                : `<span class="text-slate-900 font-bold">${totalIntersections.toLocaleString()} actual geometries intersected within ${bufferRadius} km</span>`;
+          }
+        }
+      }
+
+      // --- CONSTRUCTION ANALYSIS RUN ---
+
+      function getSelectedSites() {
+        let selected = [siteData.alpha]; // Always include primary target
+
+        // Get checked competitors
+        document.querySelectorAll(".comp-check:checked").forEach((cb) => {
+          if (siteData[cb.value]) selected.push(siteData[cb.value]);
+        });
+        return selected;
+      }
+
+      // ── REAL CONSTRUCTION DATA (from multi_site_construction_metrics.html + Layers/) ──
+      const CONSTRUCTION_DATA = {
+        SITE01: {
+          name: "AlphaOne",
+          color: "#f97316",
+          ns: [100, 100, 99, 100, 100, 100, 99, 53, 44, 9],
+          uc: [0, 0, 1, 0, 0, 0, 1, 46, 56, 64],
+          co: [0, 0, 0, 0, 0, 0, 0, 0, 0, 28],
+        },
+        SITE02: {
+          name: "Ascendes",
+          color: "#f97316",
+          ns: [65, 55, 58, 48, 54, 26, 52, 15, 23, 16],
+          uc: [22, 32, 28, 36, 22, 48, 19, 56, 45, 47],
+          co: [14, 12, 14, 15, 24, 26, 29, 29, 32, 38],
+        },
+        SITE03: {
+          name: "ESR",
+          color: "#f97316",
+          ns: [90, 88, 86, 64, 68, 57, 44, 24, 11, 8],
+          uc: [8, 6, 8, 30, 19, 24, 33, 46, 57, 61],
+          co: [1, 6, 6, 6, 13, 18, 22, 31, 32, 31],
+        },
+        SITE04: {
+          name: "EndoSpace",
+          color: "#f97316",
+          ns: [99, 49, 38, 35, 37, 33, 8, 5, 5, 4],
+          uc: [1, 51, 58, 49, 46, 47, 69, 67, 55, 50],
+          co: [0, 0, 4, 15, 17, 20, 23, 28, 40, 47],
+        },
+        SITE05: {
+          name: "Vengudi",
+          color: "#7c3aed",
+          ns: [100, 100, 98, 99, 98, 98, 92, 98, 99, 62],
+          uc: [0, 0, 2, 1, 2, 2, 5, 2, 0, 38],
+          co: [0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
+        },
+      };
+      const PERIOD_LABELS = [
+        "T01",
+        "T02",
+        "T03",
+        "T04",
+        "T05",
+        "T06",
+        "T07",
+        "T08",
+        "T09",
+        "T10",
+      ];
+
+      function runConstructionAnalysis() {
+        // Keep period labels static based on data
+        let periods = PERIOD_LABELS;
+
+        appState.generatedPeriods = periods;
+        appState.analysisTo = periods.length - 1;
+        document.getElementById("compDropdown").classList.remove("show");
+
+        // Build active site list based on selectors
+        const selectedKeys = [];
+
+        // Get Primary Target
+        const primarySelect = document.getElementById("primaryTarget");
+        let primaryId = primarySelect ? primarySelect.value : "SITE05";
+
+        // Map known static IDs for backwards compatibility if needed
+        const legacyMap = {
+          alpha: "SITE01",
+          beta: "SITE02",
+          gamma: "SITE03",
+          delta: "SITE04",
+          sigma: "SITE05",
+        };
+        if (legacyMap[primaryId]) primaryId = legacyMap[primaryId];
+        selectedKeys.push(primaryId);
+
+        // Get checked competitors
+        document.querySelectorAll(".comp-check:checked").forEach((cb) => {
+          let compId = cb.value;
+          if (legacyMap[compId]) compId = legacyMap[compId];
+          selectedKeys.push(compId);
+        });
+
+        const activeSites = selectedKeys
+          .map((k) => {
+            if (CONSTRUCTION_DATA[k]) return { ...CONSTRUCTION_DATA[k], id: k };
+            return null;
+          })
+          .filter(Boolean);
+
+        appState.activeSites = activeSites;
+
+        // Populate map site selector
+        const mapSelector = document.getElementById("mapTargetSite");
+        mapSelector.innerHTML = "";
+        activeSites.forEach((s) => {
+          const opt = document.createElement("option");
+          opt.value = s.id;
+          opt.textContent = s.name;
+          mapSelector.appendChild(opt);
+        });
+        mapSelector.onchange = () => updateLayerInfo();
+        updateLayerInfo();
+
+        document.getElementById("barChartSub").innerText =
+          `Structural Balance at ${periods[periods.length - 1]}`;
+        document.getElementById("lineChartSub").innerText =
+          `CO% Trajectory — ${periods[0]} → ${periods[periods.length - 1]} (Click a point to analyze period)`;
+
+        updateChartsData(activeSites, periods);
+      }
+
+      async function updateLayerInfo() {
+        const mapSelector = document.getElementById("mapTargetSite");
+        const mapText = document.getElementById("mapOverlayText");
+        const placeholder = document.getElementById("mapPlaceholder");
+        if (!mapSelector.options.length) return;
+
+        const siteName = mapSelector.options[mapSelector.selectedIndex].text;
+        const siteKey = mapSelector.options[mapSelector.selectedIndex].value;
+        const periods = appState.generatedPeriods || PERIOD_LABELS;
+        const selectedIndex =
+          appState.analysisTo !== undefined
+            ? appState.analysisTo
+            : periods.length - 1;
+        const lastTid = periods[selectedIndex].split(" ")[0]; // e.g. "T10", "T04"
+        const mode = appState.layerMode || "rgb";
+        const layerFileName =
+          mode === "rgb"
+            ? `${siteKey}_${lastTid}_RGB.tif`
+            : `${siteKey}_${lastTid}_Classified.tif`;
+
+        mapText.innerHTML = `<span class="font-semibold text-purple-900">${siteName} — ${lastTid}</span><br>
+                <span class="text-xs text-slate-600 font-normal mt-1 flex items-center justify-center gap-1">
+                    <i data-lucide="layers" class="w-3 h-3"></i> 
+                    Loading ${layerFileName}...
+                </span>`;
+        if (window.lucide) lucide.createIcons();
+
+        placeholder.classList.remove("hidden");
+        placeholder.style.backgroundColor = "rgba(255, 255, 255, 0.8)";
+
+        if (!constructionMap) {
+          constructionMap = L.map("leafletMap", {
+            zoomControl: true,
+            attributionControl: false,
+          }).setView([0, 0], 2);
+          L.tileLayer(
+            "https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png",
+            {
+              maxZoom: 19,
+            },
+          ).addTo(constructionMap);
+        }
+
+        if (constructionLayer) {
+          constructionMap.removeLayer(constructionLayer);
+          constructionLayer = null;
+        }
+
+        try {
+          const url = `http://127.0.0.1:5000/Layers/${layerFileName}`;
+          const response = await fetch(url);
+          if (!response.ok) throw new Error("TIF not found");
+          const arrayBuffer = await response.arrayBuffer();
+          const georaster = await parseGeoraster(arrayBuffer);
+
+          constructionLayer = new GeoRasterLayer({
+            georaster: georaster,
+            opacity: 0.9,
+            resolution: 256,
+          });
+
+          constructionLayer.addTo(constructionMap);
+          constructionMap.fitBounds(constructionLayer.getBounds());
+
+          // Hide placeholder on success
+          placeholder.classList.add("hidden");
+        } catch (err) {
+          console.error("Error loading construction layer:", err);
+          mapText.innerHTML = `<span class="font-semibold text-red-600">Error loading map data</span><br>
+                    <span class="text-xs text-slate-500">${layerFileName} missing</span>`;
+        }
+      }
+
+      function setLayer(mode) {
+        appState.layerMode = mode;
+        const rgbBtn = document.getElementById("btnMapRGB");
+        const classBtn = document.getElementById("btnMapClass");
+        const mapCanvas = document.getElementById("mapCanvas");
+
+        // Optional: mapPattern might not exist anymore if we remove it, let's just clear background
+        mapCanvas.style.backgroundColor = "#e2e8f0";
+        const mapPattern = document.getElementById("mapPattern");
+        if (mapPattern) mapPattern.style.display = "none";
+
+        updateLayerInfo();
+
+        if (mode === "rgb") {
+          rgbBtn.className =
+            "px-3 py-1.5 text-[11px] font-semibold rounded shadow-sm bg-white text-purple-900 transition";
+          classBtn.className =
+            "px-3 py-1.5 text-[11px] font-semibold rounded text-slate-500 hover:text-purple-900 transition";
+        } else {
+          classBtn.className =
+            "px-3 py-1.5 text-[11px] font-semibold rounded shadow-sm bg-white text-purple-900 transition";
+          rgbBtn.className =
+            "px-3 py-1.5 text-[11px] font-semibold rounded text-slate-500 hover:text-purple-900 transition";
+        }
+      }
+
+      // --- CHART.JS INTEGRATION ---
+
+      function initCharts() {
+        Chart.defaults.font.family = "'Inter', sans-serif";
+        Chart.defaults.color = "#64748b";
+
+        // 1. Line Chart (Completion Rate CO% over sliced time)
+        const ctxLine = document
+          .getElementById("lineChartCompletion")
+          .getContext("2d");
+        lineChart = new Chart(ctxLine, {
+          type: "line",
+          data: { labels: [], datasets: [] },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: {
+                position: "top",
+                align: "end",
+                labels: { boxWidth: 12, usePointStyle: true },
+              },
+            },
+            scales: {
+              y: {
+                max: 100,
+                min: 0,
+                grid: { color: "#f1f5f9" },
+                ticks: { callback: (v) => v + "%" },
+              },
+              x: { grid: { display: false } },
+            },
+            interaction: { mode: "index", intersect: false },
+            onClick: (e, activeElements) => {
+              if (activeElements.length > 0) {
+                const index = activeElements[0].index;
+                const periodLabel = appState.generatedPeriods[index];
+                appState.analysisTo = index; // selected index
+
+                // Update bar chart and layer view for the selected period
+                updateChartsData(
+                  appState.activeSites,
+                  appState.generatedPeriods,
+                );
+                updateLayerInfo();
+
+                // Update titles
+                document.getElementById("barChartSub").innerText =
+                  `Structural Balance at ${periodLabel}`;
+              }
+            },
+          },
+        });
+
+        // 2. Bar Chart (Stacked NS, UC, CO for 'To' period)
+        const ctxBar = document
+          .getElementById("barChartStatus")
+          .getContext("2d");
+        barChart = new Chart(ctxBar, {
+          type: "bar",
+          data: { labels: [], datasets: [] },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+              tooltip: { mode: "index" },
+            },
+            scales: {
+              x: { stacked: true, grid: { display: false } },
+              y: {
+                stacked: true,
+                max: 100,
+                grid: { color: "#f1f5f9" },
+                ticks: { callback: (v) => v + "%" },
+              },
+            },
+          },
+        });
+      }
+
+      function getInterpolatedData(originalArray, newLength) {
+        if (newLength === 1) return [originalArray[9]];
+        let result = [];
+        for (let i = 0; i < newLength; i++) {
+          let idx = Math.floor((i / (newLength - 1)) * 9);
+          result.push(originalArray[idx]);
+        }
+        return result;
+      }
+
+      function updateChartsData(activeSites, periods) {
+        let numPeriods = periods.length;
+
+        const selectedIndex =
+          appState.analysisTo !== undefined
+            ? appState.analysisTo
+            : numPeriods - 1;
+
+        // 1. Update Line Chart
+        lineChart.data.labels = periods;
+        lineChart.data.datasets = activeSites.map((site) => ({
+          label: site.name.split(" ")[0],
+          data: getInterpolatedData(site.co, numPeriods),
+          borderColor: site.color,
+          backgroundColor: site.color,
+          borderWidth: 2,
+          pointRadius: 4,
+          tension: 0.3,
+        }));
+        lineChart.update();
+
+        // 2. Update Bar Chart
+        barChart.data.labels = activeSites.map((s) => s.name.split(" ")[0]);
+        barChart.data.datasets = [
+          {
+            label: "Completed (CO)",
+            data: activeSites.map(
+              (s) => getInterpolatedData(s.co, numPeriods)[selectedIndex],
+            ),
+            backgroundColor: "#5BAA68",
+            borderRadius: 4,
+            barPercentage: 0.6,
+          },
+          {
+            label: "Under Const. (UC)",
+            data: activeSites.map(
+              (s) => getInterpolatedData(s.uc, numPeriods)[selectedIndex],
+            ),
+            backgroundColor: "#E8903A",
+            borderRadius: 4,
+            barPercentage: 0.6,
+          },
+          {
+            label: "Not Started (NS)",
+            data: activeSites.map(
+              (s) => getInterpolatedData(s.ns, numPeriods)[selectedIndex],
+            ),
+            backgroundColor: "#BFBDB5",
+            borderRadius: 4,
+            barPercentage: 0.6,
+          },
+        ];
+        barChart.update();
+      }
+    </script>
+  </body>
 </html>
