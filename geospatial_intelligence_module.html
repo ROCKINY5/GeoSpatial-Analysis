@@ -559,7 +559,7 @@
 					</button>
 				</div>
 
-				<!-- Local Layer Loader (replaces server fetch for file:// usage) -->
+				<!-- Backend Layer Loader -->
 				<div
 					class="bg-white rounded-xl border border-slate-200 p-6 purple-glow space-y-3"
 				>
@@ -569,51 +569,22 @@
 						<h3
 							class="text-xs font-bold text-purple-950 uppercase tracking-wider flex items-center gap-1.5"
 						>
-							<i data-lucide="folder-open" class="w-4 h-4"></i>
-							Load Encumbrance Layers (local files)
+							<i data-lucide="server" class="w-4 h-4"></i>
+							Load Encumbrance Layers (Backend)
 						</h3>
 						<div class="flex gap-2">
-							<label
-								class="bg-purple-700 hover:bg-purple-800 text-white text-xs font-semibold px-3 py-2 rounded-lg cursor-pointer flex items-center gap-1.5 transition"
-							>
-								<i data-lucide="upload" class="w-3.5 h-3.5"></i>
-								Select .geojson files
-								<input
-									type="file"
-									id="layerFileInput"
-									class="hidden"
-									accept=".geojson,.json"
-									multiple
-									onchange="handleLayerFilesSelected(event)"
-								/>
-							</label>
 							<button
-								onclick="downloadLayerBundle()"
-								class="bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold px-3 py-2 rounded-lg flex items-center gap-1.5 transition"
+								onclick="fetchLayersFromBackend()"
+								class="bg-purple-700 hover:bg-purple-800 text-white text-xs font-semibold px-3 py-2 rounded-lg flex items-center gap-1.5 transition"
 							>
-								<i
-									data-lucide="download"
-									class="w-3.5 h-3.5"
-								></i>
-								Save fast-load bundle
+								<i data-lucide="download-cloud" class="w-3.5 h-3.5"></i>
+								Fetch from Server
 							</button>
 						</div>
 					</div>
 					<p class="text-[11px] text-slate-500">
-						First time: select all the raw files from your
-						<code class="bg-slate-100 px-1 rounded"
-							>Catchments</code
-						>
-						folder at once. Then click
-						<span class="font-semibold text-purple-700"
-							>Save fast-load bundle</span
-						>
-						to download one small combined file (<code
-							class="bg-slate-100 px-1 rounded"
-							>catchment_layers_bundle.json</code
-						>). From then on, just select that single bundle file
-						instead — it's already stripped and loads almost
-						instantly, no server or extra software needed.
+						Make sure the backend server (app.py) is running on http://127.0.0.1:5000. 
+						This will pull all required GeoJSON layers directly without manual upload.
 					</p>
 					<div
 						id="layerFileStatus"
@@ -767,8 +738,8 @@
 									id="primaryTarget"
 									class="w-full bg-purple-50 text-purple-900 border border-purple-200 rounded-lg px-3 py-2 text-sm font-semibold focus:outline-none"
 								>
-									<option value="alpha">
-										Alpha Hub (Own Site)
+									<option value="sigma">
+										Vengudi (Own Site)
 									</option>
 								</select>
 							</div>
@@ -795,6 +766,19 @@
 									id="compDropdown"
 									class="dropdown-content absolute w-full bg-white border border-slate-200 rounded-lg shadow-lg mt-1 z-50 p-2 space-y-1"
 								>
+									<label
+										class="flex items-center gap-3 px-3 py-2 hover:bg-slate-50 rounded cursor-pointer transition"
+									>
+										<input
+											type="checkbox"
+											value="alpha"
+											class="comp-check accent-purple-600 w-4 h-4"
+										/>
+										<span
+											class="text-sm font-medium text-slate-700"
+											>AlphaOne (SITE01)</span
+										>
+									</label>
 									<label
 										class="flex items-center gap-3 px-3 py-2 hover:bg-slate-50 rounded cursor-pointer transition"
 									>
@@ -834,24 +818,11 @@
 											>EndoSpace (SITE04)</span
 										>
 									</label>
-									<label
-										class="flex items-center gap-3 px-3 py-2 hover:bg-slate-50 rounded cursor-pointer transition"
-									>
-										<input
-											type="checkbox"
-											value="sigma"
-											class="comp-check accent-purple-600 w-4 h-4"
-										/>
-										<span
-											class="text-sm font-medium text-slate-700"
-											>Vengudi (SITE05)</span
-										>
-									</label>
 								</div>
 							</div>
 						</div>
 
-						<!-- Temporal Selection -->
+						<!-- Temporal Selection (Static Data) -->
 						<div
 							class="md:col-span-5 space-y-4 border-r border-slate-100 pr-6"
 						>
@@ -868,7 +839,8 @@
 									<input
 										type="date"
 										id="dateFrom"
-										class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-600"
+										disabled
+										class="w-full bg-slate-100 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-400 cursor-not-allowed focus:outline-none"
 									/>
 								</div>
 								<div class="flex-1">
@@ -879,7 +851,8 @@
 									<input
 										type="date"
 										id="dateTo"
-										class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-600"
+										disabled
+										class="w-full bg-slate-100 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-400 cursor-not-allowed focus:outline-none"
 									/>
 								</div>
 							</div>
@@ -893,7 +866,8 @@
 									id="intervalMonths"
 									value="3"
 									min="1"
-									class="w-20 bg-slate-50 border border-slate-200 rounded-md px-2 py-1 text-sm focus:outline-none text-center"
+									disabled
+									class="w-20 bg-slate-100 border border-slate-200 rounded-md px-2 py-1 text-sm text-slate-400 cursor-not-allowed focus:outline-none text-center"
 								/>
 							</div>
 						</div>
@@ -2001,101 +1975,48 @@
 					.replace(/[\s_\-]+/g, "");
 			}
 
-			function handleLayerFilesSelected(event) {
-				const files = Array.from(event.target.files || []);
-				event.target.value = ""; // reset so re-selecting same files re-triggers change
-
-				// If exactly one file is selected and it's a previously-saved
-				// bundle, load it directly — already slimmed, no reprocessing needed.
-				if (files.length === 1) {
-					loadIfBundle(files[0]).then((wasBundle) => {
-						if (!wasBundle) processLayerFilesSequentially(files);
-					});
-					return;
-				}
-				processLayerFilesSequentially(files);
-			}
-
-			async function loadIfBundle(file) {
-				try {
-					const text = await file.text();
-					const parsed = JSON.parse(text);
-					if (parsed && parsed.__horizonBundle && parsed.layers) {
-						Object.assign(loadedLayers, parsed.layers);
-						renderLayerStatus();
-						return true;
-					}
-				} catch (err) {
-					// not JSON or not a bundle — fall through to normal handling
-				}
-				return false;
-			}
-
-			// Downloads everything currently loaded in `loadedLayers` (already
-			// slimmed to geometry + name) as one small combined file. Next session,
-			// selecting just this one file skips re-parsing the big raw originals.
-			function downloadLayerBundle() {
-				const loadedCount = Object.keys(loadedLayers).filter(
-					(k) => !loadedLayers[k].__error,
-				).length;
-				if (loadedCount === 0) {
-					alert(
-						"Load your .geojson files first, then save the bundle.",
-					);
-					return;
-				}
-				const bundle = {
-					__horizonBundle: true,
-					savedAt: new Date().toISOString(),
-					layers: loadedLayers,
-				};
-				const blob = new Blob([JSON.stringify(bundle)], {
-					type: "application/json",
-				});
-				const a = document.createElement("a");
-				a.href = URL.createObjectURL(blob);
-				a.download = "catchment_layers_bundle.json";
-				a.click();
-			}
-
-			// Process one file at a time (instead of all at once) so the browser
-			// can repaint the progress indicator and doesn't freeze under 13MB+ of JSON.
-			async function processLayerFilesSequentially(files) {
+			async function fetchLayersFromBackend() {
 				const statusEl = document.getElementById("layerFileStatus");
+				statusEl.innerHTML = `<span class="text-purple-600 font-semibold flex items-center gap-1.5">
+					<svg class="animate-spin w-3 h-3" viewBox="0 0 24 24" fill="none">
+						<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+						<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
+					</svg>
+					Connecting to backend...
+				</span>`;
 
-				for (let i = 0; i < files.length; i++) {
-					const file = files[i];
-					statusEl.innerHTML = `<span class="text-purple-600 font-semibold flex items-center gap-1.5">
-                        <svg class="animate-spin w-3 h-3" viewBox="0 0 24 24" fill="none">
-                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
-                        </svg>
-                        Parsing ${file.name} (${i + 1}/${files.length})…
-                    </span>`;
+				try {
+					const response = await fetch("http://127.0.0.1:5000/api/layers");
+					if (!response.ok) throw new Error("Failed to fetch layers list");
+					const files = await response.json();
 
-					// Yield to the browser so the spinner actually paints before the
-					// (blocking) JSON.parse of a multi-MB file runs.
-					await new Promise((r) => setTimeout(r, 0));
+					for (let i = 0; i < files.length; i++) {
+						const file = files[i];
+						statusEl.innerHTML = `<span class="text-purple-600 font-semibold flex items-center gap-1.5">
+							<svg class="animate-spin w-3 h-3" viewBox="0 0 24 24" fill="none">
+								<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+								<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
+							</svg>
+							Downloading ${file} (${i + 1}/${files.length})…
+						</span>`;
 
-					try {
-						const text = await file.text();
-						const parsed = JSON.parse(text);
-						const key = normalizeLayerKey(file.name);
-						// Strip heavy OSM property blobs down to just what we display —
-						// this is what makes later filtering/rendering fast.
-						loadedLayers[key] = slimFeatureCollection(parsed);
-					} catch (err) {
-						console.warn("Could not parse " + file.name, err);
-						loadedLayers[normalizeLayerKey(file.name)] = {
-							__error: true,
-						};
+						const layerRes = await fetch(`http://127.0.0.1:5000/api/layer/${encodeURIComponent(file)}`);
+						if (layerRes.ok) {
+							const parsed = await layerRes.json();
+							const key = normalizeLayerKey(file);
+							loadedLayers[key] = slimFeatureCollection(parsed);
+						} else {
+							console.warn("Could not download " + file);
+							loadedLayers[normalizeLayerKey(file)] = {
+								__error: true,
+							};
+						}
 					}
-
-					// Let the browser breathe between files.
-					await new Promise((r) => setTimeout(r, 0));
+					renderLayerStatus();
+				} catch (err) {
+					console.error(err);
+					statusEl.innerHTML = `<span class="text-red-600 font-semibold">Backend connection failed. Ensure app.py is running.</span>`;
 				}
-
-				renderLayerStatus();
 			}
 
 			// Keeps only geometry + a display name per feature. Files like
@@ -2512,7 +2433,7 @@
 			const CONSTRUCTION_DATA = {
 				SITE01: {
 					name: "AlphaOne",
-					color: "#7c3aed",
+					color: "#f97316",
 					ns: [100, 100, 99, 100, 100, 100, 99, 53, 44, 9],
 					uc: [0, 0, 1, 0, 0, 0, 1, 46, 56, 64],
 					co: [0, 0, 0, 0, 0, 0, 0, 0, 0, 28],
@@ -2540,7 +2461,7 @@
 				},
 				SITE05: {
 					name: "Vengudi",
-					color: "#f97316",
+					color: "#7c3aed",
 					ns: [100, 100, 98, 99, 98, 98, 92, 98, 99, 62],
 					uc: [0, 0, 2, 1, 2, 2, 5, 2, 0, 38],
 					co: [0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
@@ -2560,30 +2481,8 @@
 			];
 
 			function runConstructionAnalysis() {
-				// Build period labels — use date range if provided, else use T01-T10
+				// Keep period labels static based on data
 				let periods = PERIOD_LABELS;
-				const fromStr = document.getElementById("dateFrom").value;
-				const toStr = document.getElementById("dateTo").value;
-				const interval =
-					parseInt(document.getElementById("intervalMonths").value) ||
-					1;
-
-				if (fromStr && toStr) {
-					const fromDate = new Date(fromStr);
-					const toDate = new Date(toStr);
-					if (fromDate <= toDate) {
-						periods = [];
-						let curr = new Date(fromDate),
-							pCount = 1;
-						while (curr <= toDate && pCount <= 10) {
-							periods.push(
-								`T${String(pCount).padStart(2, "0")} (${curr.toLocaleDateString(undefined, { month: "short", year: "2-digit" })})`,
-							);
-							curr.setMonth(curr.getMonth() + interval);
-							pCount++;
-						}
-					}
-				}
 
 				appState.generatedPeriods = periods;
 				appState.analysisTo = periods.length - 1;
@@ -2620,23 +2519,7 @@
 
 				const activeSites = selectedKeys
 					.map((k) => {
-						if (CONSTRUCTION_DATA[k]) return CONSTRUCTION_DATA[k];
-
-						// If dynamic uploaded site, generate mock data for it
-						if (siteData[k]) {
-							const sd = siteData[k];
-							const color =
-								sd.type === "own" ? "#7c3aed" : "#f97316";
-
-							// Simple mock progression
-							return {
-								name: sd.name,
-								color: color,
-								ns: [100, 95, 80, 60, 40, 30, 20, 15, 10, 5],
-								uc: [0, 5, 15, 30, 40, 40, 30, 25, 20, 15],
-								co: [0, 0, 5, 10, 20, 30, 50, 60, 70, 80],
-							};
-						}
+						if (CONSTRUCTION_DATA[k]) return { ...CONSTRUCTION_DATA[k], id: k };
 						return null;
 					})
 					.filter(Boolean);
@@ -2644,9 +2527,9 @@
 				// Populate map site selector
 				const mapSelector = document.getElementById("mapTargetSite");
 				mapSelector.innerHTML = "";
-				activeSites.forEach((s, i) => {
+				activeSites.forEach((s) => {
 					const opt = document.createElement("option");
-					opt.value = Object.keys(CONSTRUCTION_DATA)[i];
+					opt.value = s.id;
 					opt.textContent = s.name;
 					mapSelector.appendChild(opt);
 				});
@@ -2719,27 +2602,33 @@
 			}
 
 			function updateMapText() {
-				const mapText = document.getElementById("mapOverlayText");
 				const mapSelector = document.getElementById("mapTargetSite");
+				const placeholder = document.getElementById(
+					"mapPlaceholderText",
+				);
+				const mapText = document.getElementById("mapCanvasText");
 
-				if (mapSelector.options.length === 0) return;
-
-				let siteName =
-					mapSelector.options[mapSelector.selectedIndex].text.split(
-						" ",
-					)[0];
-				let pStr = "";
-				if (
-					appState.generatedPeriods &&
-					appState.generatedPeriods.length > 0
-				) {
-					pStr =
-						appState.generatedPeriods[
-							appState.generatedPeriods.length - 1
-						].split(" ")[0]; // just get T01, T02 part
-				} else {
-					pStr = `T${String(appState.analysisTo + 1).padStart(2, "0")}`;
+				if (mapSelector.options.length === 0) {
+					placeholder.classList.remove("hidden");
+					mapText.innerHTML = "";
+					return;
 				}
+
+				const siteName =
+					mapSelector.options[mapSelector.selectedIndex].text;
+				const siteKey = mapSelector.options[mapSelector.selectedIndex].value;
+				const periods = appState.generatedPeriods || PERIOD_LABELS;
+				const lastTid = periods[periods.length - 1].split(" ")[0]; // e.g. "T10"
+				const mode = appState.layerMode || "rgb";
+				const layerFile =
+					mode === "rgb"
+						? `Layers/${siteKey}_${lastTid}_RGB.tif`
+						: `Layers/${siteKey}_${lastTid}_Classification_with_Polygon.tif`;
+
+				mapText.innerHTML = `<span class="font-semibold">${siteName} — ${lastTid}</span><br>
+                <span class="text-xs text-slate-500">📁 ${layerFile}</span>`;
+				placeholder.classList.remove("hidden");
+			}
 
 				if (appState.layerMode === "rgb") {
 					mapText.innerText = `EE RGB Layer - ${siteName} (${pStr})`;
