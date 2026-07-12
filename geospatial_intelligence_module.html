@@ -559,6 +559,68 @@
 					</button>
 				</div>
 
+				<!-- Local Layer Loader (replaces server fetch for file:// usage) -->
+				<div
+					class="bg-white rounded-xl border border-slate-200 p-6 purple-glow space-y-3"
+				>
+					<div
+						class="flex items-center justify-between flex-wrap gap-2"
+					>
+						<h3
+							class="text-xs font-bold text-purple-950 uppercase tracking-wider flex items-center gap-1.5"
+						>
+							<i data-lucide="folder-open" class="w-4 h-4"></i>
+							Load Encumbrance Layers (local files)
+						</h3>
+						<div class="flex gap-2">
+							<label
+								class="bg-purple-700 hover:bg-purple-800 text-white text-xs font-semibold px-3 py-2 rounded-lg cursor-pointer flex items-center gap-1.5 transition"
+							>
+								<i data-lucide="upload" class="w-3.5 h-3.5"></i>
+								Select .geojson files
+								<input
+									type="file"
+									id="layerFileInput"
+									class="hidden"
+									accept=".geojson,.json"
+									multiple
+									onchange="handleLayerFilesSelected(event)"
+								/>
+							</label>
+							<button
+								onclick="downloadLayerBundle()"
+								class="bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold px-3 py-2 rounded-lg flex items-center gap-1.5 transition"
+							>
+								<i
+									data-lucide="download"
+									class="w-3.5 h-3.5"
+								></i>
+								Save fast-load bundle
+							</button>
+						</div>
+					</div>
+					<p class="text-[11px] text-slate-500">
+						First time: select all the raw files from your
+						<code class="bg-slate-100 px-1 rounded"
+							>Catchments</code
+						>
+						folder at once. Then click
+						<span class="font-semibold text-purple-700"
+							>Save fast-load bundle</span
+						>
+						to download one small combined file (<code
+							class="bg-slate-100 px-1 rounded"
+							>catchment_layers_bundle.json</code
+						>). From then on, just select that single bundle file
+						instead — it's already stripped and loads almost
+						instantly, no server or extra software needed.
+					</p>
+					<div
+						id="layerFileStatus"
+						class="flex flex-wrap gap-2 text-[11px]"
+					></div>
+				</div>
+
 				<!-- Catchment Active View -->
 				<div
 					id="catchmentActiveContainer"
@@ -658,6 +720,22 @@
 											>2.4 km</span
 										>
 									</div>
+								</div>
+							</div>
+							<div
+								class="bg-slate-50 rounded-lg p-4 border border-slate-200"
+							>
+								<h4
+									class="text-xs font-bold text-purple-950 uppercase tracking-wider mb-2 flex items-center gap-1.5"
+								>
+									<i
+										data-lucide="layers"
+										class="w-3 h-3"
+									></i>
+									Layer Visibility
+								</h4>
+								<div id="catchmentLayerToggles" class="space-y-2 text-xs">
+									<!-- Dynamically populated by JS -->
 								</div>
 							</div>
 						</div>
@@ -1856,7 +1934,217 @@
 			// (Lock evaluation logic removed as catchment is own-sites only)
 
 			let catchmentMap = null;
-			let catchmentLayerGroup = null;
+			let catchmentBaseLayerGroup = null; // Site polygon + buffer
+			let catchmentEncumbranceLayerGroup = null; // Encumbrances
+
+			// In-memory store of user-selected local geojson layers.
+			// Keyed by a normalized name so we can match against expected layer types.
+			const loadedLayers = {}; // normalizedName -> parsed GeoJSON
+
+			// Expected layers and how to display them. `match` is used to find the
+			// best-fitting loaded file for each layer (case/space/underscore-insensitive,
+			// substring match) so it works regardless of exact filename.
+			const LAYER_DEFINITIONS = [
+				{
+					match: "protectedarea",
+					name: "Protected Area",
+					type: "Polygon",
+					color: "#84cc16",
+				},
+				{
+					match: "placeofworship",
+					name: "Place Of Worship",
+					type: "Point",
+					color: "#f59e0b",
+				},
+				{ match: "road", name: "Road", type: "Line", color: "#ef4444" },
+				{
+					match: "waterbodies1",
+					name: "Water Bodies 1",
+					type: "Polygon",
+					color: "#06b6d4",
+				},
+				{
+					match: "waterbodies2",
+					name: "Water Bodies 2",
+					type: "Polygon",
+					color: "#0ea5e9",
+				},
+				{
+					match: "powerpoles",
+					name: "Power Poles",
+					type: "Point",
+					color: "#eab308",
+				},
+				{
+					match: "powerline",
+					name: "Power Line",
+					type: "Line",
+					color: "#f43f5e",
+				},
+				{
+					match: "powersubstation",
+					name: "Power Substation",
+					type: "Point",
+					color: "#a855f7",
+				},
+			];
+
+			const layerVisibility = {};
+			LAYER_DEFINITIONS.forEach(def => layerVisibility[def.name] = true);
+			let lastScanResults = { bufferRadius: 10, layers: {} };
+
+			function normalizeLayerKey(str) {
+				return str
+					.toLowerCase()
+					.replace(/\.(geojson|json)$/i, "")
+					.replace(/[\s_\-]+/g, "");
+			}
+
+			function handleLayerFilesSelected(event) {
+				const files = Array.from(event.target.files || []);
+				event.target.value = ""; // reset so re-selecting same files re-triggers change
+
+				// If exactly one file is selected and it's a previously-saved
+				// bundle, load it directly — already slimmed, no reprocessing needed.
+				if (files.length === 1) {
+					loadIfBundle(files[0]).then((wasBundle) => {
+						if (!wasBundle) processLayerFilesSequentially(files);
+					});
+					return;
+				}
+				processLayerFilesSequentially(files);
+			}
+
+			async function loadIfBundle(file) {
+				try {
+					const text = await file.text();
+					const parsed = JSON.parse(text);
+					if (parsed && parsed.__horizonBundle && parsed.layers) {
+						Object.assign(loadedLayers, parsed.layers);
+						renderLayerStatus();
+						return true;
+					}
+				} catch (err) {
+					// not JSON or not a bundle — fall through to normal handling
+				}
+				return false;
+			}
+
+			// Downloads everything currently loaded in `loadedLayers` (already
+			// slimmed to geometry + name) as one small combined file. Next session,
+			// selecting just this one file skips re-parsing the big raw originals.
+			function downloadLayerBundle() {
+				const loadedCount = Object.keys(loadedLayers).filter(
+					(k) => !loadedLayers[k].__error,
+				).length;
+				if (loadedCount === 0) {
+					alert(
+						"Load your .geojson files first, then save the bundle.",
+					);
+					return;
+				}
+				const bundle = {
+					__horizonBundle: true,
+					savedAt: new Date().toISOString(),
+					layers: loadedLayers,
+				};
+				const blob = new Blob([JSON.stringify(bundle)], {
+					type: "application/json",
+				});
+				const a = document.createElement("a");
+				a.href = URL.createObjectURL(blob);
+				a.download = "catchment_layers_bundle.json";
+				a.click();
+			}
+
+			// Process one file at a time (instead of all at once) so the browser
+			// can repaint the progress indicator and doesn't freeze under 13MB+ of JSON.
+			async function processLayerFilesSequentially(files) {
+				const statusEl = document.getElementById("layerFileStatus");
+
+				for (let i = 0; i < files.length; i++) {
+					const file = files[i];
+					statusEl.innerHTML = `<span class="text-purple-600 font-semibold flex items-center gap-1.5">
+                        <svg class="animate-spin w-3 h-3" viewBox="0 0 24 24" fill="none">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
+                        </svg>
+                        Parsing ${file.name} (${i + 1}/${files.length})…
+                    </span>`;
+
+					// Yield to the browser so the spinner actually paints before the
+					// (blocking) JSON.parse of a multi-MB file runs.
+					await new Promise((r) => setTimeout(r, 0));
+
+					try {
+						const text = await file.text();
+						const parsed = JSON.parse(text);
+						const key = normalizeLayerKey(file.name);
+						// Strip heavy OSM property blobs down to just what we display —
+						// this is what makes later filtering/rendering fast.
+						loadedLayers[key] = slimFeatureCollection(parsed);
+					} catch (err) {
+						console.warn("Could not parse " + file.name, err);
+						loadedLayers[normalizeLayerKey(file.name)] = {
+							__error: true,
+						};
+					}
+
+					// Let the browser breathe between files.
+					await new Promise((r) => setTimeout(r, 0));
+				}
+
+				renderLayerStatus();
+			}
+
+			// Keeps only geometry + a display name per feature. Files like
+			// place_of_worship / powerpoles carry dozens of unused OSM tags per
+			// feature — dropping them cuts memory and later loop time substantially.
+			function slimFeatureCollection(geojson) {
+				if (!geojson || !Array.isArray(geojson.features))
+					return geojson;
+				return {
+					type: "FeatureCollection",
+					features: geojson.features.map((f) => {
+						const p = f.properties || {};
+						return {
+							type: "Feature",
+							geometry: f.geometry,
+							properties: {
+								name:
+									p.name ||
+									p.amenity ||
+									p.power ||
+									p.highway ||
+									"",
+							},
+						};
+					}),
+				};
+			}
+
+			function renderLayerStatus() {
+				const statusEl = document.getElementById("layerFileStatus");
+				statusEl.innerHTML = "";
+				LAYER_DEFINITIONS.forEach((def) => {
+					const found = Object.keys(loadedLayers).find((k) =>
+						k.includes(def.match),
+					);
+					const ok = found && !loadedLayers[found].__error;
+					const pill = document.createElement("span");
+					pill.className = ok
+						? "bg-green-50 text-green-700 border border-green-200 px-2 py-1 rounded-full flex items-center gap-1"
+						: "bg-slate-100 text-slate-400 border border-slate-200 px-2 py-1 rounded-full flex items-center gap-1";
+					pill.innerHTML = `<span class="w-1.5 h-1.5 rounded-full" style="background:${ok ? def.color : "#cbd5e1"}"></span>${def.name}${ok ? "" : " (not loaded)"}`;
+					statusEl.appendChild(pill);
+				});
+			}
+			// Render initial (empty) status so the panel isn't blank on load
+			document.addEventListener("DOMContentLoaded", () => {
+				renderLayerStatus();
+				renderLayerToggles();
+			});
 
 			async function runCatchmentAnalysis() {
 				const selector = document.getElementById(
@@ -1881,7 +2169,7 @@
 					"catchmentCanvasText",
 				);
 				if (canvasText) {
-					canvasText.innerText = `ST_DWithin processing via GCS Parquet files for ${activeSite.name}.`;
+					canvasText.innerText = `ST_DWithin processing via loaded GeoJSON layers for ${activeSite.name}.`;
 				}
 
 				// Simulate processing state
@@ -1910,9 +2198,10 @@
 							maxZoom: 19,
 						},
 					).addTo(catchmentMap);
-					catchmentLayerGroup = L.layerGroup().addTo(catchmentMap);
+					catchmentBaseLayerGroup = L.layerGroup().addTo(catchmentMap);
+					catchmentEncumbranceLayerGroup = L.layerGroup().addTo(catchmentMap);
 				}
-				catchmentLayerGroup.clearLayers();
+				catchmentBaseLayerGroup.clearLayers();
 
 				// Force redraw since container might have changed size
 				setTimeout(() => catchmentMap.invalidateSize(), 100);
@@ -1939,7 +2228,7 @@
 						permanent: false,
 						sticky: true,
 					});
-					poly.addTo(catchmentLayerGroup);
+					poly.addTo(catchmentBaseLayerGroup);
 
 					catchmentMap.fitBounds(poly.getBounds(), {
 						padding: [40, 40],
@@ -1957,198 +2246,225 @@
 					fillColor: "#f1f5f9",
 					fillOpacity: 0.2,
 					dashArray: "5, 5",
-				}).addTo(catchmentLayerGroup);
+				}).addTo(catchmentBaseLayerGroup);
 
-				useFallbackEncumbrances(center, bufferRadius);
+				scanLoadedEncumbrances(center, bufferRadius);
 			}
 
-			async function useFallbackEncumbrances(center, bufferRadius) {
-				const encumbranceList = [];
-				const files = [
-					{
-						url: "Catchments/protectedarea.geojson",
-						name: "Protected Area",
-						type: "Polygon",
-						color: "#84cc16",
-					},
-					{
-						url: "Catchments/place of worship2.geojson",
-						name: "Place Of Worship",
-						type: "Point",
-						color: "#f59e0b",
-					},
-					{
-						url: "Catchments/road.geojson",
-						name: "Road",
-						type: "Line",
-						color: "#ef4444",
-					},
-					{
-						url: "Catchments/water.geojson",
-						name: "Water",
-						type: "Polygon",
-						color: "#06b6d4",
-					},
-				];
+			// Scan the layers the user picked via the file input and cache real location intersections
+			function scanLoadedEncumbrances(center, bufferRadius) {
+				lastScanResults = {
+					bufferRadius: bufferRadius,
+					layers: {}
+				};
 
+				LAYER_DEFINITIONS.forEach((def) => {
+					lastScanResults.layers[def.name] = {
+						def: def,
+						features: []
+					};
+
+					const foundKey = Object.keys(loadedLayers).find((k) =>
+						k.includes(def.match),
+					);
+					if (!foundKey) return;
+					const data = loadedLayers[foundKey];
+					if (!data || data.__error || !data.features) return;
+
+					data.features.forEach((f) => {
+						if (!f.geometry || !f.geometry.coordinates) return;
+
+						// Get a sample coordinate
+						let coords = f.geometry.coordinates;
+						while (Array.isArray(coords[0])) {
+							coords = coords[0];
+						}
+
+						const lat = coords[1];
+						const lng = coords[0];
+
+						if (lat && lng && center) {
+							const cLat = center.lat || center[0];
+							const cLng = center.lng || center[1];
+
+							// approx distance in km
+							const dLat = (lat - cLat) * 111;
+							const dLng =
+								(lng - cLng) *
+								111 *
+								Math.cos((cLat * Math.PI) / 180);
+							const dist = Math.sqrt(dLat * dLat + dLng * dLng);
+
+							// Real-location mode strict — only features genuinely within the buffer.
+							const withinRadius = dist <= bufferRadius;
+
+							if (withinRadius) {
+								lastScanResults.layers[def.name].features.push({
+									feature: f,
+									dist: dist
+								});
+							}
+						}
+					});
+				});
+
+				redrawEncumbranceLayers();
+			}
+
+			function toggleLayerVisibility(layerName) {
+				layerVisibility[layerName] = !layerVisibility[layerName];
+				redrawEncumbranceLayers();
+			}
+
+			function redrawEncumbranceLayers() {
+				if (!catchmentEncumbranceLayerGroup) return;
+				catchmentEncumbranceLayerGroup.clearLayers();
+
+				const encumbranceList = [];
 				let totalIntersections = 0;
 
-				for (const file of files) {
-					try {
-						const res = await fetch(file.url);
-						if (!res.ok) continue;
-						const data = await res.json();
+				LAYER_DEFINITIONS.forEach((def) => {
+					const layerData = lastScanResults.layers[def.name];
+					if (!layerData) return;
+					
+					const hitCount = layerData.features.length;
+					
+					if (hitCount > 0 && layerVisibility[def.name]) {
+						let renderedCount = 0;
+						layerData.features.forEach((item) => {
+							if (renderedCount < 50) {
+								const style = {
+									color: def.color,
+									weight: def.type === "Line" ? 3 : 1,
+									fillColor: def.color,
+									fillOpacity: 0.5,
+								};
+								let displayGeo = JSON.parse(
+									JSON.stringify(item.feature),
+								);
 
-						let hitCount = 0;
-
-						// Simple distance filter (approximation)
-						if (data.features) {
-							data.features.forEach((f) => {
-								if (!f.geometry || !f.geometry.coordinates)
-									return;
-
-								// Get a sample coordinate
-								let coords = f.geometry.coordinates;
-								while (Array.isArray(coords[0])) {
-									coords = coords[0];
-								}
-
-								const lat = coords[1];
-								const lng = coords[0];
-
-								if (lat && lng && center) {
-									const cLat = center.lat || center[0];
-									const cLng = center.lng || center[1];
-
-									// approx distance in km
-									const dLat = (lat - cLat) * 111;
-									const dLng =
-										(lng - cLng) *
-										111 *
-										Math.cos((cLat * Math.PI) / 180);
-									const dist = Math.sqrt(
-										dLat * dLat + dLng * dLng,
-									);
-
-									// Since target sites might not be exactly inside these local geojson bounds,
-									// we dramatically loosen the filter to 80km to guarantee visible features
-									if (dist <= bufferRadius || dist <= 80) {
-										hitCount++;
-										if (hitCount < 50) {
-											// Limit rendering to prevent map lag
-											const style = {
-												color: file.color,
-												weight:
-													file.type === "Line"
-														? 3
-														: 1,
-												fillColor: file.color,
-												fillOpacity: 0.5,
-											};
-											// Overwrite the geometry slightly to force it to appear INSIDE the buffer radius visually,
-											// so the user can see the shapes around the site they clicked on.
-											let displayGeo = JSON.parse(
-												JSON.stringify(f),
-											);
-
-											// Shift coordinates into the buffer
-											const angle =
-												Math.random() * Math.PI * 2;
-											const r =
-												(Math.random() * bufferRadius) /
-												111; // degrees
-											const shiftLat =
-												cLat +
-												Math.sin(angle) * r -
-												lat;
-											const shiftLng =
-												cLng +
-												Math.cos(angle) * r -
-												lng;
-
-											const shiftCoords = (
-												coordsArray,
-											) => {
-												if (
-													typeof coordsArray[0] ===
-													"number"
-												) {
-													coordsArray[0] += shiftLng;
-													coordsArray[1] += shiftLat;
-												} else {
-													coordsArray.forEach(
-														shiftCoords,
-													);
-												}
-											};
-											shiftCoords(
-												displayGeo.geometry.coordinates,
-											);
-
-											L.geoJSON(displayGeo, {
-												style: style,
-												pointToLayer: function (
-													feature,
-													latlng,
-												) {
-													return L.circleMarker(
-														latlng,
-														{
-															radius: 5,
-															fillColor:
-																file.color,
-															color: "#fff",
-															weight: 1,
-															opacity: 1,
-															fillOpacity: 0.8,
-														},
-													);
-												},
-											})
-												.bindTooltip(
-													file.name +
-														(f.properties.name
-															? ": " +
-																f.properties
-																	.name
-															: ""),
-													{
-														className:
-															"custom-map-tooltip",
-														sticky: true,
-													},
-												)
-												.addTo(catchmentLayerGroup);
-										}
-									}
-								}
-							});
-						}
-
-						if (hitCount > 0) {
-							encumbranceList.push({
-								name: file.name,
-								type: file.type,
-								color: file.color,
-								hitCount: hitCount,
-							});
-							totalIntersections += hitCount;
-						}
-					} catch (e) {
-						console.warn("Could not load " + file.url, e);
+								L.geoJSON(displayGeo, {
+									style: style,
+									pointToLayer: function (feature, latlng) {
+										return L.circleMarker(latlng, {
+											radius: 5,
+											fillColor: def.color,
+											color: "#fff",
+											weight: 1,
+											opacity: 1,
+											fillOpacity: 0.8,
+										});
+									},
+								})
+									.bindTooltip(
+										def.name +
+											(item.feature.properties &&
+											item.feature.properties.name
+												? ": " + item.feature.properties.name
+												: ""),
+										{
+											className: "custom-map-tooltip",
+											sticky: true,
+										},
+									)
+									.addTo(catchmentEncumbranceLayerGroup);
+								renderedCount++;
+							}
+						});
 					}
-				}
 
-				// Update UI Sidebar
+					// We include all layers that have hits in the list even if hidden, 
+					// wait no - if we hide it, we shouldn't show it in the count, or should we?
+					// Let's only include visible ones in the encumbranceList for the panel count:
+					if (hitCount > 0 && layerVisibility[def.name]) {
+						encumbranceList.push({
+							name: def.name,
+							type: def.type,
+							color: def.color,
+							hitCount: hitCount,
+						});
+						totalIntersections += hitCount;
+					}
+				});
+
+				renderEncumbranceSidebar(
+					encumbranceList,
+					totalIntersections,
+					Object.keys(loadedLayers).length === 0 ? "empty" : "normal",
+					lastScanResults.bufferRadius,
+				);
+				
+				renderLayerToggles();
+			}
+
+			function renderLayerToggles() {
+				const container = document.getElementById("catchmentLayerToggles");
+				if (!container) return;
+				container.innerHTML = "";
+				
+				let hasData = false;
+				LAYER_DEFINITIONS.forEach(def => {
+					const layerData = lastScanResults.layers ? lastScanResults.layers[def.name] : null;
+					// Show toggle if it has at least 1 hit, or always show?
+					// We'll show all layer definitions always, like a legend.
+					
+					const wrap = document.createElement("label");
+					wrap.className = "flex items-center gap-2 cursor-pointer py-1";
+					
+					const box = document.createElement("div");
+					box.className = "w-3 h-3 rounded-sm flex-shrink-0 border";
+					box.style.backgroundColor = layerVisibility[def.name] ? def.color : "transparent";
+					box.style.borderColor = def.color;
+					
+					const input = document.createElement("input");
+					input.type = "checkbox";
+					input.className = "hidden";
+					input.checked = layerVisibility[def.name];
+					input.onchange = () => toggleLayerVisibility(def.name);
+					
+					const text = document.createElement("span");
+					text.className = layerVisibility[def.name] ? "text-slate-800" : "text-slate-400";
+					
+					let countText = "";
+					if (layerData && layerData.features.length > 0) {
+						countText = ` (${layerData.features.length})`;
+					}
+					text.innerText = def.name + countText;
+					
+					wrap.appendChild(input);
+					wrap.appendChild(box);
+					wrap.appendChild(text);
+					container.appendChild(wrap);
+					hasData = true;
+				});
+				
+				if (!hasData) {
+					container.innerHTML = "<div class='text-slate-400 italic'>No layers</div>";
+				}
+			}
+
+			// Updates the Encumbrances / Intersections sidebar panels.
+			// mode: "normal" | "empty" (no layers loaded) | "hidden" (toggle switched off)
+			function renderEncumbranceSidebar(
+				encumbranceList,
+				totalIntersections,
+				mode,
+				bufferRadius,
+			) {
 				const encTitles = Array.from(
 					document.querySelectorAll("h4"),
 				).filter((el) => el.textContent.includes("Encumbrances"));
 				if (encTitles.length > 0) {
-					const encTitle = encTitles[0];
-					const container = encTitle.nextElementSibling;
+					const container = encTitles[0].nextElementSibling;
 					if (container) {
 						container.innerHTML = "";
-						if (encumbranceList.length === 0) {
+						if (mode === "hidden") {
+							container.innerHTML =
+								'<div class="text-xs text-slate-500 italic p-2">Catchment layers hidden — enable the checkbox above to show them.</div>';
+						} else if (mode === "empty") {
+							container.innerHTML =
+								'<div class="text-xs text-amber-600 italic p-2">No layers loaded yet — use "Select .geojson files" above.</div>';
+						} else if (encumbranceList.length === 0) {
 							container.innerHTML =
 								'<div class="text-xs text-slate-500 italic p-2">No encumbrances found in radius.</div>';
 						} else {
@@ -2169,7 +2485,10 @@
 				if (intTitles.length > 0) {
 					const intContainer = intTitles[0].nextElementSibling;
 					if (intContainer) {
-						intContainer.innerHTML = `<span class="text-slate-900 font-bold">${totalIntersections.toLocaleString()} actual geometries intersected within ${bufferRadius} km</span>`;
+						intContainer.innerHTML =
+							mode === "hidden"
+								? '<span class="text-slate-400 italic">Layers hidden</span>'
+								: `<span class="text-slate-900 font-bold">${totalIntersections.toLocaleString()} actual geometries intersected within ${bufferRadius} km</span>`;
 					}
 				}
 			}
