@@ -22,6 +22,16 @@
     <script src="https://unpkg.com/georaster@1.6.0/dist/georaster.browser.bundle.min.js"></script>
     <script src="https://unpkg.com/georaster-layer-for-leaflet@3.8.0/dist/georaster-layer-for-leaflet.min.js"></script>
 
+    <!-- FlatGeobuf for efficient spatial queries -->
+    <script src="https://unpkg.com/flatgeobuf@3.38.0/dist/flatgeobuf-geojson.min.js"></script>
+
+    <!-- Leaflet Fullscreen Plugin -->
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet.fullscreen@3.0.1/Control.FullScreen.css"
+    />
+    <script src="https://unpkg.com/leaflet.fullscreen@3.0.1/Control.FullScreen.js"></script>
+
     <style>
       @import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap");
 
@@ -474,7 +484,7 @@
       <div id="view-catchment" class="view-section hidden space-y-6">
         <!-- Catchment Config -->
         <div
-          class="bg-white rounded-xl border border-slate-200 p-6 purple-glow grid grid-cols-1 md:grid-cols-3 gap-6 items-end"
+          class="bg-white rounded-xl border border-slate-200 p-6 purple-glow grid grid-cols-1 md:grid-cols-4 gap-6 items-end"
         >
           <div>
             <label
@@ -493,14 +503,32 @@
           <div>
             <label
               class="block text-xs font-bold uppercase tracking-wider text-purple-900 mb-2"
+              >Analysis Mode</label
+            >
+            <select
+              id="catchmentAnalysisMode"
+              onchange="toggleBufferDropdown()"
+              class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-600"
+            >
+              <option value="buffer">Buffer Analysis</option>
+              <option value="intersection">
+                Intersection Analysis (Within Site)
+              </option>
+            </select>
+          </div>
+          <div id="bufferRadiusContainer">
+            <label
+              class="block text-xs font-bold uppercase tracking-wider text-purple-900 mb-2"
               >Scan Buffer Radius</label
             >
             <select
               id="catchmentBuffer"
               class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-600"
             >
+              <option value="1" selected>1 km</option>
+              <option value="2">2 km</option>
               <option value="5">5 km</option>
-              <option value="10" selected>10 km</option>
+              <option value="10">10 km</option>
               <option value="15">15 km</option>
               <option value="20">20 km</option>
               <option value="30">30 km</option>
@@ -537,11 +565,6 @@
               </button>
             </div>
           </div>
-          <p class="text-[11px] text-slate-500">
-            Make sure the backend server (app.py) is running on
-            http://127.0.0.1:5000. This will pull all required GeoJSON layers
-            directly without manual upload.
-          </p>
           <div
             id="layerFileStatus"
             class="flex flex-wrap gap-2 text-[11px]"
@@ -560,12 +583,8 @@
               class="text-base font-bold text-slate-900 flex items-center gap-2"
             >
               <i data-lucide="radar" class="w-4 h-4 text-purple-700"></i>
-              Vector Query Map
+              Analysis Map
             </h2>
-            <span
-              class="text-[11px] font-bold text-purple-700 bg-purple-50 px-2.5 py-1 rounded-full border border-purple-100"
-              >DuckDB Core Online</span
-            >
           </div>
           <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div
@@ -650,34 +669,37 @@
       <div id="view-construction" class="view-section space-y-6">
         <!-- CONFIGURATION PANEL -->
         <div
-          class="bg-white rounded-xl border border-slate-200 p-6 purple-glow space-y-5"
+          class="bg-white rounded-xl border border-slate-200 p-4 purple-glow space-y-2"
         >
           <!-- Target Selection (Horizontal) -->
           <div
-            class="grid grid-cols-1 md:grid-cols-2 gap-6 border-b border-slate-100 pb-5"
+            class="grid grid-cols-1 md:grid-cols-2 gap-4 border-b border-slate-100 pb-2"
           >
-            <div>
+            <div class="space-y-1">
               <label
-                class="block text-xs font-bold uppercase tracking-wider text-purple-900 mb-2"
-                >Base Target Analysis (Default)</label
+                class="block text-[11px] font-bold uppercase tracking-wider text-purple-900"
+                >Base Target Analysis</label
               >
               <select
                 id="primaryTarget"
-                class="w-full bg-purple-50 text-purple-900 border border-purple-200 rounded-lg px-3 py-2 text-sm font-semibold focus:outline-none"
+                class="w-full bg-purple-50 text-purple-900 border border-purple-200 rounded-lg px-2.5 py-1.5 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-purple-500/20 transition-all"
               >
                 <option value="sigma">Vengudi (Own Site)</option>
               </select>
             </div>
-            <div class="relative">
+            <div class="relative space-y-1">
               <label
-                class="block text-xs font-bold uppercase tracking-wider text-purple-900 mb-2"
-                >Compare with Competitors (Optional)</label
+                class="block text-[11px] font-bold uppercase tracking-wider text-purple-900 flex justify-between items-center"
               >
+                <span>Compare with Competitors</span>
+              </label>
               <button
                 onclick="toggleDropdown('compDropdown')"
-                class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm font-medium text-left flex justify-between items-center hover:bg-slate-100 transition"
+                class="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-sm font-medium text-left flex justify-between items-center hover:border-purple-300 hover:bg-slate-50 transition-all focus:outline-none focus:ring-2 focus:ring-purple-500/20"
               >
-                <span id="compDropdownText">Select Competitor Sites...</span>
+                <span id="compDropdownText" class="text-slate-600"
+                  >Select Competitor Sites...</span
+                >
                 <i
                   data-lucide="chevron-down"
                   class="w-4 h-4 text-slate-400"
@@ -686,54 +708,52 @@
               <!-- Custom Multi-select Dropdown -->
               <div
                 id="compDropdown"
-                class="dropdown-content absolute w-full bg-white border border-slate-200 rounded-lg shadow-lg mt-1 z-50 p-2 space-y-1"
+                class="dropdown-content absolute w-full bg-white border border-slate-200 rounded-lg shadow-lg mt-1 z-50 p-1.5 space-y-1"
               >
                 <label
-                  class="flex items-center gap-3 px-3 py-2 hover:bg-slate-50 rounded cursor-pointer transition"
+                  class="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 rounded cursor-pointer transition"
                 >
                   <input
                     type="checkbox"
                     value="alpha"
-                    class="comp-check accent-purple-600 w-4 h-4"
+                    class="comp-check accent-purple-600 w-3.5 h-3.5"
                   />
                   <span class="text-sm font-medium text-slate-700"
-                    >AlphaOne (SITE01)</span
+                    >AlphaOne</span
                   >
                 </label>
                 <label
-                  class="flex items-center gap-3 px-3 py-2 hover:bg-slate-50 rounded cursor-pointer transition"
+                  class="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 rounded cursor-pointer transition"
                 >
                   <input
                     type="checkbox"
                     value="beta"
-                    class="comp-check accent-purple-600 w-4 h-4"
+                    class="comp-check accent-purple-600 w-3.5 h-3.5"
                   />
                   <span class="text-sm font-medium text-slate-700"
-                    >Ascendes (SITE02)</span
+                    >Ascendes</span
                   >
                 </label>
                 <label
-                  class="flex items-center gap-3 px-3 py-2 hover:bg-slate-50 rounded cursor-pointer transition"
+                  class="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 rounded cursor-pointer transition"
                 >
                   <input
                     type="checkbox"
                     value="gamma"
-                    class="comp-check accent-purple-600 w-4 h-4"
+                    class="comp-check accent-purple-600 w-3.5 h-3.5"
                   />
-                  <span class="text-sm font-medium text-slate-700"
-                    >ESR (SITE03)</span
-                  >
+                  <span class="text-sm font-medium text-slate-700">ESR</span>
                 </label>
                 <label
-                  class="flex items-center gap-3 px-3 py-2 hover:bg-slate-50 rounded cursor-pointer transition"
+                  class="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 rounded cursor-pointer transition"
                 >
                   <input
                     type="checkbox"
                     value="delta"
-                    class="comp-check accent-purple-600 w-4 h-4"
+                    class="comp-check accent-purple-600 w-3.5 h-3.5"
                   />
                   <span class="text-sm font-medium text-slate-700"
-                    >EndoSpace (SITE04)</span
+                    >EndoSpace</span
                   >
                 </label>
               </div>
@@ -741,40 +761,43 @@
           </div>
 
           <!-- Temporal Selection & Action Button (Horizontal Below) -->
-          <div class="grid grid-cols-1 md:grid-cols-12 gap-6 items-end pt-1">
-            <div class="md:col-span-10 space-y-4">
+          <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-end pt-0">
+            <div class="md:col-span-10 space-y-2">
               <label
-                class="block text-xs font-bold uppercase tracking-wider text-purple-900"
-                >Period Selection Range (Static Data)</label
+                class="block text-[11px] font-bold uppercase tracking-wider text-purple-900 flex items-center justify-between"
               >
-              <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div>
+                <span>Period Selection Range</span>
+              </label>
+              <div
+                class="grid grid-cols-1 md:grid-cols-3 gap-3 bg-slate-50 border border-slate-100 rounded-lg p-2.5"
+              >
+                <div class="space-y-1">
                   <label
-                    class="block text-[10px] font-semibold uppercase text-slate-500 mb-1"
+                    class="block text-[9px] font-semibold uppercase text-slate-500"
                     >From Date</label
                   >
                   <input
                     type="date"
                     id="dateFrom"
                     disabled
-                    class="w-full bg-slate-100 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-400 cursor-not-allowed focus:outline-none"
+                    class="w-full bg-white border border-slate-200 rounded-md px-2 py-1 text-sm text-slate-400 cursor-not-allowed focus:outline-none"
                   />
                 </div>
-                <div>
+                <div class="space-y-1">
                   <label
-                    class="block text-[10px] font-semibold uppercase text-slate-500 mb-1"
+                    class="block text-[9px] font-semibold uppercase text-slate-500"
                     >To Date</label
                   >
                   <input
                     type="date"
                     id="dateTo"
                     disabled
-                    class="w-full bg-slate-100 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-400 cursor-not-allowed focus:outline-none"
+                    class="w-full bg-white border border-slate-200 rounded-md px-2 py-1 text-sm text-slate-400 cursor-not-allowed focus:outline-none"
                   />
                 </div>
-                <div>
+                <div class="space-y-1">
                   <label
-                    class="block text-[10px] font-semibold uppercase text-slate-500 mb-1"
+                    class="block text-[9px] font-semibold uppercase text-slate-500"
                     >Time Interval (Months):</label
                   >
                   <input
@@ -783,19 +806,19 @@
                     value="3"
                     min="1"
                     disabled
-                    class="w-full bg-slate-100 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-400 cursor-not-allowed focus:outline-none text-center"
+                    class="w-full bg-white border border-slate-200 rounded-md px-2 py-1 text-sm text-slate-400 cursor-not-allowed focus:outline-none text-center"
                   />
                 </div>
               </div>
             </div>
 
             <!-- Action Button -->
-            <div class="md:col-span-2">
+            <div class="md:col-span-2 flex full">
               <button
                 onclick="runConstructionAnalysis()"
-                class="w-full h-full min-h-[50px] bg-purple-700 hover:bg-purple-800 text-white font-bold text-sm px-4 py-3 rounded-lg transition shadow-md flex flex-col items-center justify-center gap-1"
+                class="w-full bg-purple-700 hover:bg-purple-800 text-white font-bold text-sm px-3 py-2 rounded-lg transition shadow-[0_4px_14px_0_rgba(126,34,206,0.39)] hover:shadow-[0_6px_20px_rgba(126,34,206,0.23)] hover:-translate-y-0.5 flex flex-row items-center justify-center gap-2 mt-auto"
               >
-                <i data-lucide="activity" class="w-5 h-5"></i>
+                <i data-lucide="activity" class="w-4 h-4"></i>
                 <span>Run Analysis</span>
               </button>
             </div>
@@ -817,18 +840,26 @@
                   class="text-xs font-bold text-purple-950 uppercase tracking-wider block mb-1"
                   >Imagery Layer View</span
                 >
-                <!-- Site Selector specifically for the Map -->
-                <select
-                  id="mapTargetSite"
-                  onchange="updateLayerInfo()"
-                  class="bg-slate-50 border border-slate-200 rounded-md px-2 py-1 text-xs font-semibold text-slate-700 focus:outline-none"
-                >
-                  <option value="alpha">Alpha Hub (Own)</option>
-                </select>
+                <div class="flex gap-2 mt-1">
+                  <!-- Site Selector specifically for the Map -->
+                  <select
+                    id="mapTargetSite"
+                    onchange="updateLayerInfo()"
+                    class="bg-slate-50 border border-slate-200 rounded-md px-2 py-1 text-xs font-semibold text-slate-700 focus:outline-none"
+                  ></select>
+
+                  <!-- Period Selector specifically for the Map -->
+                  <select
+                    id="mapTargetPeriod"
+                    onchange="onMapPeriodChange()"
+                    class="bg-slate-50 border border-slate-200 rounded-md px-2 py-1 text-xs font-semibold text-slate-700 focus:outline-none"
+                  ></select>
+                </div>
               </div>
               <div
                 class="bg-slate-100 p-0.5 rounded-lg border border-slate-200 flex"
               >
+                <!--
                 <button
                   id="btnMapRGB"
                   onclick="setLayer('rgb')"
@@ -836,12 +867,13 @@
                 >
                   RGB Layer
                 </button>
+                -->
                 <button
                   id="btnMapClass"
                   onclick="setLayer('class')"
                   class="px-3 py-1.5 text-[11px] font-semibold rounded text-slate-500 hover:text-purple-900 transition"
                 >
-                  Classification
+                  Development Status Layer
                 </button>
               </div>
             </div>
@@ -901,15 +933,15 @@
               class="mt-4 pt-3 border-t border-slate-100 flex items-center justify-center gap-4 text-[10px] text-slate-600 font-medium"
             >
               <div class="flex items-center gap-1.5">
-                <div class="w-2.5 h-2.5 rounded bg-[#5BAA68]"></div>
+                <div class="w-2.5 h-2.5 rounded bg-[#1565C0]"></div>
                 Completed (CO)
               </div>
               <div class="flex items-center gap-1.5">
-                <div class="w-2.5 h-2.5 rounded bg-[#E8903A]"></div>
+                <div class="w-2.5 h-2.5 rounded bg-[#FF6600]"></div>
                 Under Const. (UC)
               </div>
               <div class="flex items-center gap-1.5">
-                <div class="w-2.5 h-2.5 rounded bg-[#BFBDB5]"></div>
+                <div class="w-2.5 h-2.5 rounded bg-[#4CAF50]"></div>
                 Not Started (NS)
               </div>
             </div>
@@ -926,7 +958,7 @@
                 class="text-xs font-bold text-purple-950 uppercase tracking-wider flex items-center gap-1.5"
               >
                 <i data-lucide="trending-up" class="w-4 h-4"></i>
-                Completion Rate Trajectory (CO %)
+                Completion Rate Trajectory %
               </h3>
               <p class="text-[10px] text-slate-500 mt-1" id="lineChartSub">
                 Tracking site completion phases over selected timeline. (Click a
@@ -947,13 +979,26 @@
       // --- MASTER DATASET ---
       const siteData = {};
 
+      // --- API CONFIG ---
+      const API_BASE =
+        window.location.origin.includes("5000") ||
+        window.location.origin.includes("localhost") ||
+        window.location.origin.includes("127.0.0.1")
+          ? window.location.origin
+          : "http://127.0.0.1:5000";
+
       // --- APP STATE ---
       let appState = {
         view: "construction",
-        layerMode: "rgb", // 'rgb' or 'class'
-        analysisTo: 9,
-        generatedPeriods: [],
+        layerMode: "class", // default to 'class' since 'rgb' is commented out
+        analysisTo: undefined, // stores last temporal index
       };
+
+      function escapeHtml(str) {
+        const div = document.createElement("div");
+        div.textContent = str ?? "";
+        return div.innerHTML;
+      }
 
       // --- CHART INSTANCES ---
       let lineChart = null;
@@ -966,11 +1011,77 @@
 
       let portfolioMap = null;
 
+      function renderPortfolioSite(sid, site, map, listEl) {
+        const geo = site.geo;
+        let coords;
+        if (geo.type === "MultiPolygon") {
+          coords = geo.coordinates.map((poly) =>
+            poly[0].map((c) => [c[1], c[0]]),
+          );
+        } else {
+          coords = geo.coordinates[0].map((c) => [c[1], c[0]]);
+        }
+
+        const poly = L.polygon(coords, {
+          color: site.color,
+          fillColor: site.color,
+          fillOpacity: 0.25,
+          weight: 2,
+        });
+        poly._siteId = sid; // tag for delete lookup
+
+        const badge = site.type === "own" ? "Own Asset" : "Competitor";
+        const safeName = escapeHtml(site.name);
+
+        poly.bindPopup(
+          `<b>${safeName}</b><br><span style="font-size:11px;color:#64748b">${badge} · ${sid}</span>`,
+        );
+
+        // Add hover tooltip with details
+        const sd = siteData[sid] || site;
+        const desc = escapeHtml(sd.desc || "");
+        const loc = escapeHtml(sd.location || "");
+        poly.bindTooltip(
+          `
+                    <div class="p-1">
+                        <div class="font-bold text-slate-800 text-sm">${safeName}</div>
+                        <div class="text-[10px] text-purple-700 font-bold mb-1">${badge}</div>
+                    ${loc ? `<div class="text-xs text-slate-600 flex items-center gap-1 mb-1">📍 ${loc}</div>` : ""}
+                        ${desc ? `<div class="text-xs text-slate-500 italic truncate max-w-[200px]">${desc}</div>` : ""}
+                    </div>
+                `,
+          {
+            sticky: true,
+            className:
+              "custom-map-tooltip rounded-lg border-slate-200 shadow-sm",
+          },
+        );
+
+        poly.addTo(map);
+
+        if (listEl) {
+          const div = document.createElement("div");
+          div.dataset.sid = sid; // tag for delete lookup
+          div.className =
+            "flex items-center gap-2 text-xs py-1.5 border-b border-slate-100 last:border-0 cursor-pointer hover:bg-slate-50 rounded px-1 transition";
+          div.innerHTML = `<span style="background:${site.color}" class="w-2.5 h-2.5 rounded-full shrink-0"></span><span class="font-semibold text-slate-800">${safeName}</span><span class="ml-auto text-[10px] text-slate-400 font-medium">${sid}</span>`;
+          div.onclick = () => {
+            map.fitBounds(poly.getBounds(), {
+              padding: [20, 20],
+            });
+            poly.openPopup();
+          };
+          listEl.appendChild(div);
+        }
+        return poly;
+      }
+
       function initPortfolioMap() {
         if (portfolioMap) return;
         portfolioMap = L.map("portfolioMap", {
           zoomControl: true,
           scrollWheelZoom: true,
+          fullscreenControl: true,
         });
         L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
           attribution: "© OpenStreetMap contributors",
@@ -982,65 +1093,8 @@
         listEl.innerHTML = "";
 
         Object.entries(sitePolygons).forEach(([sid, site]) => {
-          const geo = site.geo;
-          let coords;
-          if (geo.type === "MultiPolygon") {
-            coords = geo.coordinates.map((poly) =>
-              poly[0].map((c) => [c[1], c[0]]),
-            );
-          } else {
-            coords = geo.coordinates[0].map((c) => [c[1], c[0]]);
-          }
-
-          const poly = L.polygon(coords, {
-            color: site.color,
-            fillColor: site.color,
-            fillOpacity: 0.25,
-            weight: 2,
-          });
-          poly._siteId = sid; // tag for delete lookup
-
-          const badge = site.type === "own" ? "Own Asset" : "Competitor";
-          poly.bindPopup(
-            `<b>${site.name}</b><br><span style="font-size:11px;color:#64748b">${badge} · ${sid}</span>`,
-          );
-
-          // Add hover tooltip with details
-          const sd = siteData[sid] || site;
-          const desc = sd.desc || "";
-          const loc = sd.location || "";
-          poly.bindTooltip(
-            `
-                    <div class="p-1">
-                        <div class="font-bold text-slate-800 text-sm">${site.name}</div>
-                        <div class="text-[10px] text-purple-700 font-bold mb-1">${badge}</div>
-                    ${loc ? `<div class="text-xs text-slate-600 flex items-center gap-1 mb-1">📍 ${loc}</div>` : ""}
-                        ${desc ? `<div class="text-xs text-slate-500 italic truncate max-w-[200px]">${desc}</div>` : ""}
-                    </div>
-                `,
-            {
-              sticky: true,
-              className:
-                "custom-map-tooltip rounded-lg border-slate-200 shadow-sm",
-            },
-          );
-
-          poly.addTo(portfolioMap);
+          const poly = renderPortfolioSite(sid, site, portfolioMap, listEl);
           allLayers.push(poly);
-
-          // Sidebar entry
-          const div = document.createElement("div");
-          div.dataset.sid = sid; // tag for delete lookup
-          div.className =
-            "flex items-center gap-2 text-xs py-1.5 border-b border-slate-100 last:border-0 cursor-pointer hover:bg-slate-50 rounded px-1 transition";
-          div.innerHTML = `<span style="background:${site.color}" class="w-2.5 h-2.5 rounded-full shrink-0"></span><span class="font-semibold text-slate-800">${site.name}</span><span class="ml-auto text-[10px] text-slate-400 font-medium">${sid}</span>`;
-          div.onclick = () => {
-            portfolioMap.fitBounds(poly.getBounds(), {
-              padding: [20, 20],
-            });
-            poly.openPopup();
-          };
-          listEl.appendChild(div);
         });
 
         if (allLayers.length) {
@@ -1075,9 +1129,11 @@
           cb.addEventListener("change", updateDropdownText);
         });
 
+        populateConstructionSelectors();
+
         // Initial analysis run
         runConstructionAnalysis();
-        setLayer("rgb");
+        setLayer("class");
       });
 
       // Close dropdown when clicking outside
@@ -1091,15 +1147,27 @@
         document.getElementById(id).classList.toggle("show");
       }
 
+      function toggleBufferDropdown() {
+        const mode = document.getElementById("catchmentAnalysisMode").value;
+        const bufferContainer = document.getElementById(
+          "bufferRadiusContainer",
+        );
+        if (mode === "intersection") {
+          bufferContainer.style.display = "none";
+        } else {
+          bufferContainer.style.display = "block";
+        }
+      }
+
       function updateDropdownText() {
         const checked = document.querySelectorAll(".comp-check:checked");
         const textElement = document.getElementById("compDropdownText");
         if (checked.length === 0) {
-          textElement.innerText = "Select Competitor Sites...";
-          textElement.classList.add("text-slate-400");
+          textElement.innerHTML = "Select Competitor Sites...";
+          textElement.className = "text-slate-400 font-normal";
         } else {
-          textElement.innerText = `${checked.length} Competitor(s) Selected`;
-          textElement.classList.remove("text-slate-400");
+          textElement.innerHTML = `<span class="text-purple-700 font-bold">${checked.length}</span> <span class="font-semibold text-slate-700">Competitor(s) Selected</span>`;
+          textElement.className = "";
         }
       }
 
@@ -1133,6 +1201,10 @@
           "border-purple-700",
           "shadow-[0_-4px_6px_-6px_rgba(0,0,0,0.1)]",
         );
+
+        if (viewName === "catchment" && !layersLoaded && !layersLoading) {
+          fetchLayersFromBackend();
+        }
 
         // Update Header texts
         const titles = {
@@ -1183,19 +1255,44 @@
         ).length;
       }
 
+      function populateConstructionSelectors() {
+        const primarySelect = document.getElementById("primaryTarget");
+        const compDropdown = document.getElementById("compDropdown");
+        if (!primarySelect || !compDropdown) return;
+
+        primarySelect.innerHTML = "";
+        compDropdown.innerHTML = "";
+
+        Object.entries(CONSTRUCTION_DATA).forEach(([id, site]) => {
+          const isOwn = site.color === "#7c3aed"; // Vengudi/own-site color
+
+          if (isOwn) {
+            const opt = document.createElement("option");
+            opt.value = id;
+            opt.textContent = `${site.name} (Own Site)`;
+            primarySelect.appendChild(opt);
+          } else {
+            const label = document.createElement("label");
+            label.className =
+              "flex items-center gap-3 px-3 py-2 hover:bg-slate-50 rounded cursor-pointer transition";
+            label.innerHTML = `
+                            <input type="checkbox" value="${id}" class="comp-check accent-purple-600 w-4 h-4" onchange="updateDropdownText()">
+                            <span class="text-sm font-medium text-slate-700">${escapeHtml(site.name)} (${id})</span>
+                        `;
+            compDropdown.appendChild(label);
+          }
+        });
+        updateDropdownText();
+      }
+
       function populateSelectors() {
         const catchmentSelect = document.getElementById(
           "catchmentAssetSelector",
         );
-        const primarySelect = document.getElementById("primaryTarget");
-        const compDropdown = document.getElementById("compDropdown");
 
         if (catchmentSelect) catchmentSelect.innerHTML = "";
-        if (primarySelect) primarySelect.innerHTML = "";
-        if (compDropdown) compDropdown.innerHTML = "";
 
         let hasOwn = false;
-        let hasComp = false;
 
         Object.values(siteData).forEach((site) => {
           if (site.type === "own") {
@@ -1208,26 +1305,6 @@
               opt.setAttribute("data-type", "own");
               catchmentSelect.appendChild(opt);
             }
-            // Add to Primary Target Selector (Construction)
-            if (primarySelect) {
-              const opt = document.createElement("option");
-              opt.value = site.id;
-              opt.textContent = `${site.name} (Own Site)`;
-              primarySelect.appendChild(opt);
-            }
-          } else if (site.type === "comp") {
-            hasComp = true;
-            // Add to Competitor Dropdown (Construction)
-            if (compDropdown) {
-              const label = document.createElement("label");
-              label.className =
-                "flex items-center gap-3 px-3 py-2 hover:bg-slate-50 rounded cursor-pointer transition";
-              label.innerHTML = `
-                            <input type="checkbox" value="${site.id}" class="comp-check accent-purple-600 w-4 h-4" onchange="updateDropdownText()">
-                            <span class="text-sm font-medium text-slate-700">${site.name}</span>
-                        `;
-              compDropdown.appendChild(label);
-            }
           }
         });
 
@@ -1235,15 +1312,8 @@
         if (!hasOwn) {
           if (catchmentSelect)
             catchmentSelect.innerHTML =
-              '<option value="alpha" data-type="own">Alpha Hub (Own Site)</option>';
-          if (primarySelect)
-            primarySelect.innerHTML =
-              '<option value="alpha">Alpha Hub (Own Site)</option>';
+              '<option value="sigma" data-type="own">Vengudi (Own Site)</option>';
         }
-        if (!hasComp && compDropdown) {
-          compDropdown.innerHTML = `<div class="px-3 py-2 text-sm text-slate-500">No competitor sites available.</div>`;
-        }
-        updateDropdownText();
       }
 
       function populateDashboardCards() {
@@ -1676,62 +1746,8 @@
       }
 
       function addPolygonToPortfolioMap(sid, site) {
-        const geo = site.geo;
-        let coords;
-        if (geo.type === "MultiPolygon") {
-          coords = geo.coordinates.map((poly) =>
-            poly[0].map((c) => [c[1], c[0]]),
-          );
-        } else {
-          coords = geo.coordinates[0].map((c) => [c[1], c[0]]);
-        }
-        const poly = L.polygon(coords, {
-          color: site.color,
-          fillColor: site.color,
-          fillOpacity: 0.25,
-          weight: 2,
-        });
-        poly._siteId = sid; // tag for delete lookup
-        const badge = site.type === "own" ? "Own Asset" : "Competitor";
-        poly.bindPopup(
-          `<b>${site.name}</b><br><span style="font-size:11px;color:#64748b">${badge}</span>`,
-        );
-
-        // Add hover tooltip with details
-        const sd = siteData[sid] || site;
-        const desc = sd.desc || "";
-        const loc = sd.location || "";
-        poly.bindTooltip(
-          `
-                <div class="p-1">
-                    <div class="font-bold text-slate-800 text-sm">${site.name}</div>
-                    <div class="text-[10px] text-purple-700 font-bold mb-1">${badge}</div>
-                    ${loc ? `<div class="text-xs text-slate-600 flex items-center gap-1 mb-1">📍 ${loc}</div>` : ""}
-                    ${desc ? `<div class="text-xs text-slate-500 italic truncate max-w-[200px]">${desc}</div>` : ""}
-                </div>
-            `,
-          {
-            sticky: true,
-            className:
-              "custom-map-tooltip rounded-lg border-slate-200 shadow-sm",
-          },
-        );
-
-        poly.addTo(portfolioMap);
-
         const listEl = document.getElementById("portfolio-site-list");
-        const div = document.createElement("div");
-        div.dataset.sid = sid; // tag for delete lookup
-        div.className =
-          "flex items-center gap-2 text-xs py-1.5 border-b border-slate-100 last:border-0 cursor-pointer hover:bg-slate-50 rounded px-1 transition";
-        div.innerHTML = `<span style="background:${site.color}" class="w-2.5 h-2.5 rounded-full shrink-0"></span><span class="font-semibold text-slate-800">${site.name}</span><span class="ml-auto text-[10px] text-slate-400 font-medium">${sid}</span>`;
-        div.onclick = () => {
-          portfolioMap.fitBounds(poly.getBounds(), {
-            padding: [20, 20],
-          });
-          poly.openPopup();
-        };
-        listEl.appendChild(div);
+        renderPortfolioSite(sid, site, portfolioMap, listEl);
       }
 
       // --- CATCHMENT LOGIC ---
@@ -1743,8 +1759,6 @@
 
       // In-memory store of user-selected local geojson layers.
       // Keyed by a normalized name so we can match against expected layer types.
-      const loadedLayers = {}; // normalizedName -> parsed GeoJSON
-
       // Expected layers and how to display them. `match` is used to find the
       // best-fitting loaded file for each layer (case/space/underscore-insensitive,
       // substring match) so it works regardless of exact filename.
@@ -1761,18 +1775,11 @@
           type: "Point",
           color: "#f59e0b",
         },
-        { match: "road", name: "Road", type: "Line", color: "#ef4444" },
         {
-          match: "waterbodies1",
-          name: "Water Bodies 1",
+          match: "waterbodies",
+          name: "Water Bodies",
           type: "Polygon",
           color: "#06b6d4",
-        },
-        {
-          match: "waterbodies2",
-          name: "Water Bodies 2",
-          type: "Polygon",
-          color: "#0ea5e9",
         },
         {
           match: "powerpoles",
@@ -1792,6 +1799,42 @@
           type: "Point",
           color: "#a855f7",
         },
+        {
+          match: "cemetery",
+          name: "Cemetery",
+          type: "Polygon",
+          color: "#71717a",
+        },
+        {
+          match: "crematorium",
+          name: "Crematorium",
+          type: "Polygon",
+          color: "#52525b",
+        },
+        {
+          match: "shop_mall",
+          name: "Shopping Mall",
+          type: "Polygon",
+          color: "#ec4899",
+        },
+        {
+          match: "highway_primary",
+          name: "Primary Highway",
+          type: "Line",
+          color: "#ef4444",
+        },
+        {
+          match: "highway_secondary",
+          name: "Secondary Highway",
+          type: "Line",
+          color: "#f97316",
+        },
+        {
+          match: "highway_trunk",
+          name: "Trunk Highway",
+          type: "Line",
+          color: "#b91c1c",
+        },
       ];
 
       const layerVisibility = {};
@@ -1805,49 +1848,86 @@
           .replace(/[\s_\-]+/g, "");
       }
 
+      let layersLoading = false;
+      let layersLoaded = false;
+
+      function getCurrentCatchmentCenter() {
+        const selector = document.getElementById("catchmentAssetSelector");
+        const selectedSiteId = selector ? selector.value : null;
+        const sitePoly = sitePolygons[selectedSiteId];
+        if (sitePoly) {
+          const geo = sitePoly.geo;
+          if (geo.type === "Point") {
+            return {
+              lat: geo.coordinates[1],
+              lng: geo.coordinates[0],
+            };
+          }
+          // Simple average of first ring for polygons
+          const coords =
+            geo.type === "MultiPolygon"
+              ? geo.coordinates[0][0]
+              : geo.coordinates[0];
+          if (coords && coords.length > 0) {
+            let sumLat = 0,
+              sumLng = 0;
+            coords.forEach((c) => {
+              sumLng += c[0];
+              sumLat += c[1];
+            });
+            return {
+              lat: sumLat / coords.length,
+              lng: sumLng / coords.length,
+            };
+          }
+        }
+        return null; // fallback
+      }
+
+      let availableFgbFiles = [];
+
       async function fetchLayersFromBackend() {
+        if (layersLoading || layersLoaded) return;
+        layersLoading = true;
+        setRunAnalysisEnabled(false);
+
         const statusEl = document.getElementById("layerFileStatus");
-        statusEl.innerHTML = `<span class="text-purple-600 font-semibold flex items-center gap-1.5">
-					<svg class="animate-spin w-3 h-3" viewBox="0 0 24 24" fill="none">
-						<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-						<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
-					</svg>
-					Connecting to backend...
-				</span>`;
+        if (statusEl) {
+          statusEl.innerHTML = `<span class="text-purple-600 font-semibold flex items-center gap-1.5">
+						<svg class="animate-spin w-3 h-3" viewBox="0 0 24 24" fill="none">
+							<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+							<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
+						</svg>
+						Connecting to backend...
+					</span>`;
+        }
 
         try {
-          const response = await fetch("http://127.0.0.1:5000/api/layers");
-          if (!response.ok) throw new Error("Failed to fetch layers list");
-          const files = await response.json();
+          const resLayers = await fetch(`${API_BASE}/api/layers`);
+          if (!resLayers.ok) throw new Error("Failed to fetch layers list");
 
-          for (let i = 0; i < files.length; i++) {
-            const file = files[i];
-            statusEl.innerHTML = `<span class="text-purple-600 font-semibold flex items-center gap-1.5">
-							<svg class="animate-spin w-3 h-3" viewBox="0 0 24 24" fill="none">
-								<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-								<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
-							</svg>
-							Downloading ${file} (${i + 1}/${files.length})…
-						</span>`;
-
-            const layerRes = await fetch(
-              `http://127.0.0.1:5000/api/layer/${encodeURIComponent(file)}`,
-            );
-            if (layerRes.ok) {
-              const parsed = await layerRes.json();
-              const key = normalizeLayerKey(file);
-              loadedLayers[key] = slimFeatureCollection(parsed);
-            } else {
-              console.warn("Could not download " + file);
-              loadedLayers[normalizeLayerKey(file)] = {
-                __error: true,
-              };
-            }
-          }
+          availableFgbFiles = await resLayers.json();
+          layersLoaded = true;
           renderLayerStatus();
         } catch (err) {
           console.error(err);
-          statusEl.innerHTML = `<span class="text-red-600 font-semibold">Backend connection failed. Ensure app.py is running.</span>`;
+          if (statusEl) {
+            statusEl.innerHTML = `<span class="text-red-600 font-semibold">Backend connection failed. Ensure app.py is running.</span>`;
+          }
+        } finally {
+          layersLoading = false;
+          setRunAnalysisEnabled(true);
+        }
+      }
+
+      function setRunAnalysisEnabled(enabled) {
+        const btn = document.querySelector(
+          '[onclick="runCatchmentAnalysis()"]',
+        );
+        if (btn) {
+          btn.disabled = !enabled;
+          btn.classList.toggle("opacity-50", !enabled);
+          btn.classList.toggle("cursor-not-allowed", !enabled);
         }
       }
 
@@ -1873,17 +1953,24 @@
 
       function renderLayerStatus() {
         const statusEl = document.getElementById("layerFileStatus");
+        if (!statusEl) return;
         statusEl.innerHTML = "";
+
         LAYER_DEFINITIONS.forEach((def) => {
-          const found = Object.keys(loadedLayers).find((k) =>
-            k.includes(def.match),
+          let ok = availableFgbFiles.some((f) =>
+            f.toLowerCase().includes(def.match),
           );
-          const ok = found && !loadedLayers[found].__error;
+
           const pill = document.createElement("span");
-          pill.className = ok
-            ? "bg-green-50 text-green-700 border border-green-200 px-2 py-1 rounded-full flex items-center gap-1"
-            : "bg-slate-100 text-slate-400 border border-slate-200 px-2 py-1 rounded-full flex items-center gap-1";
-          pill.innerHTML = `<span class="w-1.5 h-1.5 rounded-full" style="background:${ok ? def.color : "#cbd5e1"}"></span>${def.name}${ok ? "" : " (not loaded)"}`;
+          if (ok) {
+            pill.className =
+              "bg-green-50 text-green-700 border border-green-200 px-2 py-1 rounded-full flex items-center gap-1";
+            pill.innerHTML = `<span class="w-1.5 h-1.5 rounded-full" style="background:${def.color}"></span>${def.name}`;
+          } else {
+            pill.className =
+              "bg-slate-100 text-slate-400 border border-slate-200 px-2 py-1 rounded-full flex items-center gap-1";
+            pill.innerHTML = `<span class="w-1.5 h-1.5 rounded-full" style="background:#cbd5e1"></span>${def.name} (not loaded)`;
+          }
           statusEl.appendChild(pill);
         });
       }
@@ -1899,9 +1986,14 @@
         const activeSite = siteData[selectedSiteId] || {
           name: "Alpha Hub",
         };
-        const bufferRadius = parseFloat(
-          document.getElementById("catchmentBuffer")?.value || 10,
-        );
+        const analysisMode =
+          document.getElementById("catchmentAnalysisMode")?.value || "buffer";
+        const bufferRadius =
+          analysisMode === "intersection"
+            ? 0
+            : parseFloat(
+                document.getElementById("catchmentBuffer")?.value || 10,
+              );
 
         // Show the active container
         const activeContainer = document.getElementById(
@@ -1912,20 +2004,18 @@
         // Update the display names
         const canvasText = document.getElementById("catchmentCanvasText");
         if (canvasText) {
-          canvasText.innerText = `ST_DWithin processing via loaded GeoJSON layers for ${activeSite.name}.`;
+          if (analysisMode === "intersection") {
+            canvasText.innerText = `ST_Intersects processing via loaded GeoJSON layers for ${activeSite.name}.`;
+          } else {
+            canvasText.innerText = `ST_DWithin processing via loaded GeoJSON layers for ${activeSite.name}.`;
+          }
         }
 
         // Simulate processing state
         const overlay = document.getElementById("catchmentMapOverlay");
         if (overlay) {
-          // start animating out
-          setTimeout(() => {
-            overlay.style.opacity = "0";
-            setTimeout(() => {
-              overlay.style.display = "none";
-              if (catchmentMap) catchmentMap.invalidateSize();
-            }, 500);
-          }, 1000);
+          overlay.style.display = "flex";
+          overlay.style.opacity = "1";
         }
 
         // Map init
@@ -1933,21 +2023,23 @@
           catchmentMap = L.map("catchmentMap", {
             zoomControl: true,
             scrollWheelZoom: true,
+            fullscreenControl: true,
           });
-          L.tileLayer(
-            "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
-            {
-              attribution: "© OpenStreetMap contributors © CARTO",
-              maxZoom: 19,
-            },
-          ).addTo(catchmentMap);
+          L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+            attribution: "© OpenStreetMap contributors",
+            maxZoom: 19,
+          }).addTo(catchmentMap);
           catchmentBaseLayerGroup = L.layerGroup().addTo(catchmentMap);
           catchmentEncumbranceLayerGroup = L.layerGroup().addTo(catchmentMap);
         }
         catchmentBaseLayerGroup.clearLayers();
+        catchmentEncumbranceLayerGroup.clearLayers();
 
         // Force redraw since container might have changed size
         setTimeout(() => catchmentMap.invalidateSize(), 100);
+
+        // Fetch layer list if not loaded yet
+        await fetchLayersFromBackend();
 
         let center = [12.931343, 80.137158]; // fallback
         let sitePoly = sitePolygons[selectedSiteId];
@@ -1981,73 +2073,178 @@
           catchmentMap.setView(center, 12);
         }
 
-        // Draw Buffer
-        L.circle(center, {
-          radius: bufferRadius * 1000,
-          color: "#94a3b8",
-          weight: 1,
-          fillColor: "#f1f5f9",
-          fillOpacity: 0.2,
-          dashArray: "5, 5",
-        }).addTo(catchmentBaseLayerGroup);
+        // Draw Buffer if buffer mode
+        if (analysisMode === "buffer") {
+          L.circle(center, {
+            radius: bufferRadius * 1000,
+            color: "#94a3b8",
+            weight: 1,
+            fillColor: "#f1f5f9",
+            fillOpacity: 0.2,
+            dashArray: "5, 5",
+          }).addTo(catchmentBaseLayerGroup);
+        }
 
-        scanLoadedEncumbrances(center, bufferRadius);
+        await scanLoadedEncumbrances(
+          center,
+          bufferRadius,
+          sitePoly,
+          analysisMode,
+        );
+
+        if (overlay) {
+          overlay.style.opacity = "0";
+          setTimeout(() => {
+            overlay.style.display = "none";
+            if (catchmentMap) catchmentMap.invalidateSize();
+          }, 500);
+        }
       }
 
       // Scan the layers the user picked via the file input and cache real location intersections
-      function scanLoadedEncumbrances(center, bufferRadius) {
+      function anyPointWithinRadius(geometry, cLat, cLng, radiusKm) {
+        function walk(c) {
+          if (typeof c[0] === "number") {
+            const lng = c[0],
+              lat = c[1];
+            const dLat = (lat - cLat) * 111;
+            const dLng = (lng - cLng) * 111 * Math.cos((cLat * Math.PI) / 180);
+            return Math.sqrt(dLat * dLat + dLng * dLng) <= radiusKm;
+          }
+          return c.some(walk);
+        }
+        return walk(geometry.coordinates);
+      }
+
+      // Simple ray-casting point in polygon algorithm
+      function pointInPolygon(point, vs) {
+        let x = point[0],
+          y = point[1];
+        let inside = false;
+        for (let i = 0, j = vs.length - 1; i < vs.length; j = i++) {
+          let xi = vs[i][0],
+            yi = vs[i][1];
+          let xj = vs[j][0],
+            yj = vs[j][1];
+          let intersect =
+            yi > y != yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi;
+          if (intersect) inside = !inside;
+        }
+        return inside;
+      }
+
+      function anyPointInSitePoly(geometry, sitePolyGeo) {
+        // extract polygon rings from site poly
+        let rings = [];
+        if (sitePolyGeo.type === "Polygon") {
+          rings = sitePolyGeo.coordinates;
+        } else if (sitePolyGeo.type === "MultiPolygon") {
+          rings = sitePolyGeo.coordinates.map((p) => p[0]);
+        }
+        if (rings.length === 0) return false;
+
+        function walk(c) {
+          if (typeof c[0] === "number") {
+            return rings.some((ring) => pointInPolygon(c, ring));
+          }
+          return c.some(walk);
+        }
+        return walk(geometry.coordinates);
+      }
+
+      async function scanLoadedEncumbrances(
+        center,
+        bufferRadius,
+        sitePoly,
+        analysisMode,
+      ) {
         lastScanResults = {
           bufferRadius: bufferRadius,
           layers: {},
         };
 
-        LAYER_DEFINITIONS.forEach((def) => {
-          lastScanResults.layers[def.name] = {
-            def: def,
-            features: [],
-          };
+        const cLat = center.lat || center[0];
+        const cLng = center.lng || center[1];
 
-          const foundKey = Object.keys(loadedLayers).find((k) =>
-            k.includes(def.match),
-          );
-          if (!foundKey) return;
-          const data = loadedLayers[foundKey];
-          if (!data || data.__error || !data.features) return;
-
-          data.features.forEach((f) => {
-            if (!f.geometry || !f.geometry.coordinates) return;
-
-            // Get a sample coordinate
-            let coords = f.geometry.coordinates;
-            while (Array.isArray(coords[0])) {
-              coords = coords[0];
+        // Calculate bounding box for flatgeobuf request
+        let rect;
+        if (analysisMode === "intersection" && sitePoly) {
+          // get bbox of the site polygon
+          let minX = Infinity,
+            minY = Infinity,
+            maxX = -Infinity,
+            maxY = -Infinity;
+          function walkBbox(c) {
+            if (typeof c[0] === "number") {
+              if (c[0] < minX) minX = c[0];
+              if (c[1] < minY) minY = c[1];
+              if (c[0] > maxX) maxX = c[0];
+              if (c[1] > maxY) maxY = c[1];
+              return;
             }
+            c.forEach(walkBbox);
+          }
+          walkBbox(sitePoly.geo.coordinates);
+          rect = { minX, minY, maxX, maxY };
+        } else {
+          const latDelta = bufferRadius / 111.32;
+          const lngDelta =
+            bufferRadius / (111.32 * Math.cos((cLat * Math.PI) / 180));
+          rect = {
+            minX: cLng - lngDelta,
+            minY: cLat - latDelta,
+            maxX: cLng + lngDelta,
+            maxY: cLat + latDelta,
+          };
+        }
 
-            const lat = coords[1];
-            const lng = coords[0];
+        await Promise.all(
+          LAYER_DEFINITIONS.map(async (def) => {
+            lastScanResults.layers[def.name] = {
+              def: def,
+              features: [],
+            };
 
-            if (lat && lng && center) {
-              const cLat = center.lat || center[0];
-              const cLng = center.lng || center[1];
+            const matchingFiles = availableFgbFiles.filter((f) =>
+              f.toLowerCase().includes(def.match),
+            );
 
-              // approx distance in km
-              const dLat = (lat - cLat) * 111;
-              const dLng =
-                (lng - cLng) * 111 * Math.cos((cLat * Math.PI) / 180);
-              const dist = Math.sqrt(dLat * dLat + dLng * dLng);
+            for (const foundFile of matchingFiles) {
+              try {
+                const url = `${API_BASE}/Catchments/${encodeURIComponent(foundFile)}`;
 
-              // Real-location mode strict — only features genuinely within the buffer.
-              const withinRadius = dist <= bufferRadius;
+                // deserialize yields features intersecting the bbox
+                for await (const f of flatgeobuf.deserialize(url, rect)) {
+                  if (!f.geometry || !f.geometry.coordinates) continue;
 
-              if (withinRadius) {
-                lastScanResults.layers[def.name].features.push({
-                  feature: f,
-                  dist: dist,
-                });
+                  let intersects = false;
+                  if (analysisMode === "intersection" && sitePoly) {
+                    intersects = anyPointInSitePoly(f.geometry, sitePoly.geo);
+                  } else {
+                    intersects = anyPointWithinRadius(
+                      f.geometry,
+                      cLat,
+                      cLng,
+                      bufferRadius,
+                    );
+                  }
+
+                  if (intersects) {
+                    lastScanResults.layers[def.name].features.push({
+                      feature: f,
+                      dist: 0,
+                    });
+                  }
+                }
+              } catch (e) {
+                console.error(
+                  `Failed to load/parse FlatGeobuf for ${def.name} in file ${foundFile}:`,
+                  e,
+                );
               }
             }
-          });
-        });
+          }),
+        );
 
         redrawEncumbranceLayers();
       }
@@ -2057,9 +2254,19 @@
         redrawEncumbranceLayers();
       }
 
+      const RENDER_CAP = 10000;
+
+      // Create once, reuse across all layers/redraws instead of implicitly
+      // creating a fresh canvas context per L.geoJSON call.
+      let sharedCanvasRenderer = null;
+
       function redrawEncumbranceLayers() {
         if (!catchmentEncumbranceLayerGroup) return;
         catchmentEncumbranceLayerGroup.clearLayers();
+
+        if (!sharedCanvasRenderer) {
+          sharedCanvasRenderer = L.canvas({ padding: 0.5 });
+        }
 
         const encumbranceList = [];
         let totalIntersections = 0;
@@ -2071,55 +2278,45 @@
           const hitCount = layerData.features.length;
 
           if (hitCount > 0 && layerVisibility[def.name]) {
-            let renderedCount = 0;
-            layerData.features.forEach((item) => {
-              if (renderedCount < 50) {
-                const style = {
-                  color: def.color,
-                  weight: def.type === "Line" ? 3 : 1,
+            const capped = layerData.features.slice(0, RENDER_CAP);
+            const fc = {
+              type: "FeatureCollection",
+              features: capped.map((item) => item.feature),
+            };
+
+            L.geoJSON(fc, {
+              renderer: sharedCanvasRenderer,
+              style: {
+                color: def.color,
+                weight: def.type === "Line" ? 3 : 1,
+                fillColor: def.color,
+                fillOpacity: 0.5,
+              },
+              pointToLayer: (feature, latlng) =>
+                L.circleMarker(latlng, {
+                  radius: 5,
                   fillColor: def.color,
-                  fillOpacity: 0.5,
-                };
-                let displayGeo = JSON.parse(JSON.stringify(item.feature));
+                  color: "#fff",
+                  weight: 1,
+                  opacity: 1,
+                  fillOpacity: 0.8,
+                }),
+              onEachFeature: (feature, lyr) => {
+                const name = feature.properties && feature.properties.name;
+                lyr.bindTooltip(def.name + (name ? ": " + name : ""), {
+                  className: "custom-map-tooltip",
+                  sticky: true,
+                });
+              },
+            }).addTo(catchmentEncumbranceLayerGroup);
 
-                L.geoJSON(displayGeo, {
-                  style: style,
-                  pointToLayer: function (feature, latlng) {
-                    return L.circleMarker(latlng, {
-                      radius: 5,
-                      fillColor: def.color,
-                      color: "#fff",
-                      weight: 1,
-                      opacity: 1,
-                      fillOpacity: 0.8,
-                    });
-                  },
-                })
-                  .bindTooltip(
-                    def.name +
-                      (item.feature.properties && item.feature.properties.name
-                        ? ": " + item.feature.properties.name
-                        : ""),
-                    {
-                      className: "custom-map-tooltip",
-                      sticky: true,
-                    },
-                  )
-                  .addTo(catchmentEncumbranceLayerGroup);
-                renderedCount++;
-              }
-            });
-          }
-
-          // We include all layers that have hits in the list even if hidden,
-          // wait no - if we hide it, we shouldn't show it in the count, or should we?
-          // Let's only include visible ones in the encumbranceList for the panel count:
-          if (hitCount > 0 && layerVisibility[def.name]) {
+            const note =
+              hitCount > RENDER_CAP ? ` (showing first ${RENDER_CAP})` : "";
             encumbranceList.push({
-              name: def.name,
+              name: def.name + note,
               type: def.type,
               color: def.color,
-              hitCount: hitCount,
+              hitCount,
             });
             totalIntersections += hitCount;
           }
@@ -2128,7 +2325,7 @@
         renderEncumbranceSidebar(
           encumbranceList,
           totalIntersections,
-          Object.keys(loadedLayers).length === 0 ? "empty" : "normal",
+          availableFgbFiles.length === 0 ? "empty" : "normal",
           lastScanResults.bufferRadius,
         );
 
@@ -2240,16 +2437,6 @@
 
       // --- CONSTRUCTION ANALYSIS RUN ---
 
-      function getSelectedSites() {
-        let selected = [siteData.alpha]; // Always include primary target
-
-        // Get checked competitors
-        document.querySelectorAll(".comp-check:checked").forEach((cb) => {
-          if (siteData[cb.value]) selected.push(siteData[cb.value]);
-        });
-        return selected;
-      }
-
       // ── REAL CONSTRUCTION DATA (from multi_site_construction_metrics.html + Layers/) ──
       const CONSTRUCTION_DATA = {
         SITE01: {
@@ -2289,16 +2476,16 @@
         },
       };
       const PERIOD_LABELS = [
-        "T01",
-        "T02",
-        "T03",
-        "T04",
-        "T05",
-        "T06",
-        "T07",
-        "T08",
-        "T09",
-        "T10",
+        "Jul-Dec 2021",
+        "Jan-Jun 2022",
+        "Jul-Dec 2022",
+        "Jan-Jun 2023",
+        "Jul-Dec 2023",
+        "Jan-Jun 2024",
+        "Jul-Dec 2024",
+        "Jan-Jun 2025",
+        "Jul-Dec 2025",
+        "Jan-Jun 2026",
       ];
 
       function runConstructionAnalysis() {
@@ -2315,23 +2502,11 @@
         // Get Primary Target
         const primarySelect = document.getElementById("primaryTarget");
         let primaryId = primarySelect ? primarySelect.value : "SITE05";
-
-        // Map known static IDs for backwards compatibility if needed
-        const legacyMap = {
-          alpha: "SITE01",
-          beta: "SITE02",
-          gamma: "SITE03",
-          delta: "SITE04",
-          sigma: "SITE05",
-        };
-        if (legacyMap[primaryId]) primaryId = legacyMap[primaryId];
         selectedKeys.push(primaryId);
 
         // Get checked competitors
         document.querySelectorAll(".comp-check:checked").forEach((cb) => {
-          let compId = cb.value;
-          if (legacyMap[compId]) compId = legacyMap[compId];
-          selectedKeys.push(compId);
+          selectedKeys.push(cb.value);
         });
 
         const activeSites = selectedKeys
@@ -2352,7 +2527,25 @@
           opt.textContent = s.name;
           mapSelector.appendChild(opt);
         });
-        mapSelector.onchange = () => updateLayerInfo();
+
+        // Populate map period selector
+        const periodSelector = document.getElementById("mapTargetPeriod");
+        periodSelector.innerHTML = "";
+        periods.forEach((p, index) => {
+          const opt = document.createElement("option");
+          opt.value = index; // Store the index (0-9)
+          opt.textContent = p;
+          periodSelector.appendChild(opt);
+        });
+
+        // Set to whatever was previously selected, or default to latest
+        periodSelector.value =
+          appState.analysisTo !== undefined
+            ? appState.analysisTo
+            : periods.length - 1;
+
+        // Force both to re-sync
+        appState.analysisTo = parseInt(periodSelector.value);
         updateLayerInfo();
 
         document.getElementById("barChartSub").innerText =
@@ -2361,6 +2554,23 @@
           `CO% Trajectory — ${periods[0]} → ${periods[periods.length - 1]} (Click a point to analyze period)`;
 
         updateChartsData(activeSites, periods);
+      }
+
+      function onMapPeriodChange() {
+        const periodSelector = document.getElementById("mapTargetPeriod");
+        const index = parseInt(periodSelector.value);
+
+        appState.analysisTo = index;
+        const periods = appState.generatedPeriods || PERIOD_LABELS;
+        const periodLabel = periods[index];
+
+        // Update charts and layer
+        updateChartsData(appState.activeSites, periods);
+        updateLayerInfo();
+
+        // Update titles
+        document.getElementById("barChartSub").innerText =
+          `Structural Balance at ${periodLabel}`;
       }
 
       async function updateLayerInfo() {
@@ -2376,12 +2586,12 @@
           appState.analysisTo !== undefined
             ? appState.analysisTo
             : periods.length - 1;
-        const lastTid = periods[selectedIndex].split(" ")[0]; // e.g. "T10", "T04"
+        const lastTid = "T" + String(selectedIndex + 1).padStart(2, "0"); // e.g. "T10", "T04"
         const mode = appState.layerMode || "rgb";
         const layerFileName =
           mode === "rgb"
             ? `${siteKey}_${lastTid}_RGB.tif`
-            : `${siteKey}_${lastTid}_Classified.tif`;
+            : `${siteKey}_${lastTid}_Classification.tif`;
 
         mapText.innerHTML = `<span class="font-semibold text-purple-900">${siteName} — ${lastTid}</span><br>
                 <span class="text-xs text-slate-600 font-normal mt-1 flex items-center justify-center gap-1">
@@ -2396,15 +2606,19 @@
         if (!constructionMap) {
           constructionMap = L.map("leafletMap", {
             zoomControl: true,
-            attributionControl: false,
+            attributionControl: true,
+            fullscreenControl: true,
           }).setView([0, 0], 2);
-          L.tileLayer(
-            "https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png",
-            {
-              maxZoom: 19,
-            },
-          ).addTo(constructionMap);
+          L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+            attribution: "© OpenStreetMap contributors",
+            maxZoom: 19,
+          }).addTo(constructionMap);
         }
+
+        // Force Leaflet to recalculate container bounds
+        setTimeout(() => {
+          if (constructionMap) constructionMap.invalidateSize();
+        }, 100);
 
         if (constructionLayer) {
           constructionMap.removeLayer(constructionLayer);
@@ -2412,7 +2626,7 @@
         }
 
         try {
-          const url = `http://127.0.0.1:5000/Layers/${layerFileName}`;
+          const url = `${API_BASE}/Layers/${layerFileName}`;
           const response = await fetch(url);
           if (!response.ok) throw new Error("TIF not found");
           const arrayBuffer = await response.arrayBuffer();
@@ -2422,6 +2636,22 @@
             georaster: georaster,
             opacity: 0.9,
             resolution: 256,
+            pixelValuesToColorFn: (values) => {
+              if (values[0] === georaster.noDataValue) return null;
+
+              // If it's a 3-band RGB layer
+              if (values.length >= 3) {
+                return `rgb(${values[0]}, ${values[1]}, ${values[2]})`;
+              }
+
+              // Classification mapping: 0=NS, 1=UC, 2=CO
+              if (values[0] === 0) return "#BFBDB5"; // Not Started
+              if (values[0] === 1) return "#E8903A"; // Under Construction
+              if (values[0] === 2) return "#5BAA68"; // Completed
+
+              // Fallback for single-band unknown
+              return `rgb(${values[0]}, ${values[0]}, ${values[0]})`;
+            },
           });
 
           constructionLayer.addTo(constructionMap);
@@ -2450,15 +2680,19 @@
         updateLayerInfo();
 
         if (mode === "rgb") {
-          rgbBtn.className =
-            "px-3 py-1.5 text-[11px] font-semibold rounded shadow-sm bg-white text-purple-900 transition";
-          classBtn.className =
-            "px-3 py-1.5 text-[11px] font-semibold rounded text-slate-500 hover:text-purple-900 transition";
+          if (rgbBtn)
+            rgbBtn.className =
+              "px-3 py-1.5 text-[11px] font-semibold rounded shadow-sm bg-white text-purple-900 transition";
+          if (classBtn)
+            classBtn.className =
+              "px-3 py-1.5 text-[11px] font-semibold rounded text-slate-500 hover:text-purple-900 transition";
         } else {
-          classBtn.className =
-            "px-3 py-1.5 text-[11px] font-semibold rounded shadow-sm bg-white text-purple-900 transition";
-          rgbBtn.className =
-            "px-3 py-1.5 text-[11px] font-semibold rounded text-slate-500 hover:text-purple-900 transition";
+          if (classBtn)
+            classBtn.className =
+              "px-3 py-1.5 text-[11px] font-semibold rounded shadow-sm bg-white text-purple-900 transition";
+          if (rgbBtn)
+            rgbBtn.className =
+              "px-3 py-1.5 text-[11px] font-semibold rounded text-slate-500 hover:text-purple-900 transition";
         }
       }
 
@@ -2500,6 +2734,13 @@
                 const index = activeElements[0].index;
                 const periodLabel = appState.generatedPeriods[index];
                 appState.analysisTo = index; // selected index
+
+                // Sync the dropdown selector
+                const periodSelector =
+                  document.getElementById("mapTargetPeriod");
+                if (periodSelector) {
+                  periodSelector.value = index;
+                }
 
                 // Update bar chart and layer view for the selected period
                 updateChartsData(
@@ -2582,7 +2823,7 @@
             data: activeSites.map(
               (s) => getInterpolatedData(s.co, numPeriods)[selectedIndex],
             ),
-            backgroundColor: "#5BAA68",
+            backgroundColor: "#1565C0",
             borderRadius: 4,
             barPercentage: 0.6,
           },
@@ -2591,7 +2832,7 @@
             data: activeSites.map(
               (s) => getInterpolatedData(s.uc, numPeriods)[selectedIndex],
             ),
-            backgroundColor: "#E8903A",
+            backgroundColor: "#FF6600",
             borderRadius: 4,
             barPercentage: 0.6,
           },
@@ -2600,7 +2841,7 @@
             data: activeSites.map(
               (s) => getInterpolatedData(s.ns, numPeriods)[selectedIndex],
             ),
-            backgroundColor: "#BFBDB5",
+            backgroundColor: "#4CAF50",
             borderRadius: 4,
             barPercentage: 0.6,
           },
