@@ -458,18 +458,6 @@
               <i data-lucide="download" class="w-3.5 h-3.5"></i>
               Export Backup
             </button>
-            <label
-              class="bg-white border border-slate-200 text-slate-600 px-3 py-1.5 rounded text-xs font-semibold hover:bg-slate-50 cursor-pointer flex items-center gap-1"
-            >
-              <i data-lucide="upload" class="w-3.5 h-3.5"></i>
-              Import Backup
-              <input
-                type="file"
-                class="hidden"
-                accept=".json"
-                onchange="importPortfolio(event)"
-              />
-            </label>
           </div>
         </div>
         <div
@@ -511,9 +499,7 @@
               class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-600"
             >
               <option value="buffer">Buffer Analysis</option>
-              <option value="intersection">
-                Intersection Analysis (Within Site)
-              </option>
+              <option value="intersection">Intersection Analysis</option>
             </select>
           </div>
           <div id="bufferRadiusContainer">
@@ -1218,7 +1204,7 @@
           },
           catchment: {
             t: "Catchment Analysis",
-            s: "DuckDB spatial queries for encumbrances & boundaries",
+            s: "Spatial queries for encumbrances & boundaries",
           },
           construction: {
             t: "Construction Progress",
@@ -1359,6 +1345,10 @@
                             class="w-full bg-slate-50 border border-slate-200 rounded-md px-2.5 py-1.5 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-purple-500">
                         <input id="inp-loc-${site.id}" type="text" value="${site.location}" placeholder="Location"
                             class="w-full bg-slate-50 border border-slate-200 rounded-md px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-purple-500">
+                        <select id="inp-type-${site.id}" class="w-full bg-slate-50 border border-slate-200 rounded-md px-2.5 py-1.5 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-purple-500">
+                            <option value="own" ${site.type === "own" ? "selected" : ""}>Own Asset</option>
+                            <option value="comp" ${site.type === "comp" ? "selected" : ""}>Competitor</option>
+                        </select>
                         <div class="flex gap-2 pt-1">
                             <button onclick="saveEdit('${site.id}')"
                                 class="flex-1 bg-purple-700 hover:bg-purple-800 text-white text-xs font-semibold py-1.5 rounded-md transition">Save</button>
@@ -1428,51 +1418,29 @@
         a.click();
       }
 
-      function importPortfolio(event) {
-        const file = event.target.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          try {
-            const data = JSON.parse(e.target.result);
-            if (data.sites) {
-              localStorage.setItem(
-                "horizonCustomSites",
-                JSON.stringify(data.sites),
-              );
-              Object.assign(siteData, data.sites);
-            }
-            if (data.polys) {
-              localStorage.setItem(
-                "horizonCustomPolys",
-                JSON.stringify(data.polys),
-              );
-              Object.assign(sitePolygons, data.polys);
-            }
-            if (portfolioMap) {
-              initPortfolioMap(); // Re-render map
-            }
-            populateDashboardCards();
-            updateDashboardStats();
-            alert("Portfolio imported successfully!");
-          } catch (err) {
-            alert("Invalid portfolio backup file.");
-          }
-        };
-        reader.readAsText(file);
-        event.target.value = ""; // Reset input
-      }
-
       function saveEdit(id) {
         const newName = document.getElementById(`inp-name-${id}`).value.trim();
         const newLoc = document.getElementById(`inp-loc-${id}`).value.trim();
+        const newType = document.getElementById(`inp-type-${id}`).value;
         if (!newName) return;
         siteData[id].name = newName;
         siteData[id].location = newLoc;
-        document.getElementById(`name-${id}`).textContent = newName;
-        document.getElementById(`loc-${id}`).textContent = newLoc;
-        cancelEdit(id);
+        siteData[id].type = newType;
+        if (sitePolygons[id]) {
+          sitePolygons[id].type = newType;
+          sitePolygons[id].color = newType === "own" ? "#7c3aed" : "#fb923c"; // update color based on type
+        }
         saveToLocalStorage();
+        populateDashboardCards(); // re-render cards to reflect badge changes
+        if (portfolioMap) {
+          portfolioMap.eachLayer((layer) => {
+            if (layer._siteId === id) portfolioMap.removeLayer(layer);
+          });
+          const listEl = document.getElementById("portfolio-site-list");
+          const existingItem = listEl.querySelector(`[data-sid="${id}"]`);
+          if (existingItem) existingItem.remove(); // remove old item from list before re-adding
+          addPolygonToPortfolioMap(id, sitePolygons[id]);
+        }
       }
 
       // --- DELETE CARD ---
@@ -1839,7 +1807,7 @@
 
       const layerVisibility = {};
       LAYER_DEFINITIONS.forEach((def) => (layerVisibility[def.name] = true));
-      let lastScanResults = { bufferRadius: 10, layers: {} };
+      let lastScanResults = { bufferRadius: 10, mode: "buffer", layers: {} };
 
       function normalizeLayerKey(str) {
         return str
@@ -2082,6 +2050,7 @@
             fillColor: "#f1f5f9",
             fillOpacity: 0.2,
             dashArray: "5, 5",
+            interactive: false,
           }).addTo(catchmentBaseLayerGroup);
         }
 
@@ -2160,6 +2129,7 @@
       ) {
         lastScanResults = {
           bufferRadius: bufferRadius,
+          mode: analysisMode,
           layers: {},
         };
 
@@ -2265,7 +2235,7 @@
         catchmentEncumbranceLayerGroup.clearLayers();
 
         if (!sharedCanvasRenderer) {
-          sharedCanvasRenderer = L.canvas({ padding: 0.5 });
+          sharedCanvasRenderer = L.canvas({ padding: 0.5, interactive: true });
         }
 
         const encumbranceList = [];
@@ -2291,6 +2261,7 @@
                 weight: def.type === "Line" ? 3 : 1,
                 fillColor: def.color,
                 fillOpacity: 0.5,
+                interactive: true,
               },
               pointToLayer: (feature, latlng) =>
                 L.circleMarker(latlng, {
@@ -2300,6 +2271,7 @@
                   weight: 1,
                   opacity: 1,
                   fillOpacity: 0.8,
+                  interactive: true,
                 }),
               onEachFeature: (feature, lyr) => {
                 const name = feature.properties && feature.properties.name;
@@ -2327,6 +2299,7 @@
           totalIntersections,
           availableFgbFiles.length === 0 ? "empty" : "normal",
           lastScanResults.bufferRadius,
+          lastScanResults.mode,
         );
 
         renderLayerToggles();
@@ -2392,6 +2365,7 @@
         totalIntersections,
         mode,
         bufferRadius,
+        analysisMode = "buffer",
       ) {
         const encTitles = Array.from(document.querySelectorAll("h4")).filter(
           (el) => el.textContent.includes("Encumbrances"),
@@ -2427,10 +2401,16 @@
         if (intTitles.length > 0) {
           const intContainer = intTitles[0].nextElementSibling;
           if (intContainer) {
-            intContainer.innerHTML =
-              mode === "hidden"
-                ? '<span class="text-slate-400 italic">Layers hidden</span>'
-                : `<span class="text-slate-900 font-bold">${totalIntersections.toLocaleString()} actual geometries intersected within ${bufferRadius} km</span>`;
+            let message = "";
+            if (mode === "hidden") {
+              message =
+                '<span class="text-slate-400 italic">Layers hidden</span>';
+            } else if (analysisMode === "intersection") {
+              message = `<span class="text-slate-900 font-bold">${totalIntersections.toLocaleString()} actual geometries intersected within site</span>`;
+            } else {
+              message = `<span class="text-slate-900 font-bold">${totalIntersections.toLocaleString()} actual geometries intersected within ${bufferRadius} km</span>`;
+            }
+            intContainer.innerHTML = message;
           }
         }
       }
@@ -2551,7 +2531,7 @@
         document.getElementById("barChartSub").innerText =
           `Structural Balance at ${periods[periods.length - 1]}`;
         document.getElementById("lineChartSub").innerText =
-          `CO% Trajectory — ${periods[0]} → ${periods[periods.length - 1]} (Click a point to analyze period)`;
+          `CO% Trajectory — ${periods[0]} → ${periods[periods.length - 1]}`;
 
         updateChartsData(activeSites, periods);
       }
