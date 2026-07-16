@@ -139,11 +139,11 @@
         class="px-8 flex gap-2 overflow-x-auto bg-slate-50/50 border-t border-slate-100"
       >
         <button
-          onclick="switchView('upload')"
-          id="nav-upload"
+          onclick="switchView('portfolios')"
+          id="nav-portfolios"
           class="nav-btn px-4 py-3 text-sm font-semibold text-slate-500 hover:text-purple-700 hover:bg-purple-50 border-b-2 border-transparent transition flex items-center gap-2 whitespace-nowrap"
         >
-          <i data-lucide="upload-cloud" class="w-4 h-4"></i> Upload Assets
+          <i data-lucide="folder-open" class="w-4 h-4"></i> Portfolio Management
         </button>
         <button
           onclick="switchView('dashboard')"
@@ -172,15 +172,40 @@
 
     <!-- DASHBOARD SCROLL CONTAINER -->
     <main class="flex-1 overflow-y-auto p-8 bg-slate-50/50 relative">
-      <!-- ================= VIEW 1: UPLOAD ================= -->
+      <!-- ================= VIEW 1: PORTFOLIOS (NEW) ================= -->
+      <div id="view-portfolios" class="view-section hidden max-w-5xl mx-auto space-y-6">
+        <div class="flex justify-between items-center mb-2">
+           <!-- <div>
+             <h2 class="text-xl font-bold text-slate-900">Portfolio Management</h2>
+             <p class="text-sm text-slate-500 mt-1">Manage your asset portfolios.</p>
+           </div> -->
+           <button onclick="createNewPortfolio()" class="bg-purple-700 hover:bg-purple-800 text-white font-medium text-sm px-6 py-2 rounded-lg shadow-sm transition flex items-center gap-2">
+              <i data-lucide="plus" class="w-4 h-4"></i> Create New Portfolio
+           </button>
+        </div>
+        <div id="portfolio-list-container" class="space-y-4">
+          <!-- Rendered via JS -->
+        </div>
+      </div>
+
+      <!-- ================= VIEW 1.5: UPLOAD (PORTFOLIO DETAILS) ================= -->
       <div
         id="view-upload"
         class="view-section hidden max-w-4xl mx-auto space-y-6"
       >
+        <div class="flex items-center gap-4 mb-4">
+          <button onclick="switchView('portfolios')" class="text-purple-700 hover:text-purple-900 font-semibold text-sm flex items-center gap-1 bg-purple-50 px-3 py-1.5 rounded-lg transition">
+            <i data-lucide="arrow-left" class="w-4 h-4"></i> Back to Portfolios
+          </button>
+          <h2 class="text-xl font-bold text-slate-900" id="current-portfolio-title">Portfolio Details</h2>
+        </div>
+
         <div
           class="bg-white rounded-xl border border-slate-200 p-8 purple-glow space-y-7"
         >
-          <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+          <h2
+            class="text-lg font-bold text-slate-900 flex items-center gap-2"
+          >
             <i data-lucide="file-up" class="w-5 h-5 text-purple-700"></i>
             Import Geospatial Asset Boundaries
           </h2>
@@ -344,6 +369,14 @@
 
       <!-- ================= VIEW 2: DASHBOARD ================= -->
       <div id="view-dashboard" class="view-section hidden space-y-6">
+        <div class="flex justify-between items-center mb-2">
+          <div class="flex items-center gap-3">
+            <label class="text-sm font-semibold text-slate-600">Select Portfolio:</label>
+            <select id="dashboardPortfolioSelector" onchange="changeDashboardPortfolio(this.value)" class="bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-purple-600 shadow-sm">
+               <!-- Populated via JS -->
+            </select>
+          </div>
+        </div>
         <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
           <div
             class="bg-white rounded-xl border border-slate-200 p-5 purple-glow"
@@ -531,7 +564,7 @@
         </div>
 
         <!-- Backend Layer Loader -->
-        <div
+        <!-- <div
           class="bg-white rounded-xl border border-slate-200 p-6 purple-glow space-y-3"
         >
           <div class="flex items-center justify-between flex-wrap gap-2">
@@ -546,7 +579,7 @@
             id="layerFileStatus"
             class="flex flex-wrap gap-2 text-[11px]"
           ></div>
-        </div>
+        </div> -->
 
         <!-- Catchment Active View -->
         <div
@@ -602,7 +635,7 @@
                   >
                 </p>
               </div>
-              <div class="bg-slate-50 rounded-lg p-4 border border-slate-200">
+              <!-- <div class="bg-slate-50 rounded-lg p-4 border border-slate-200">
                 <h4
                   class="text-xs font-bold text-purple-950 uppercase tracking-wider mb-2 flex items-center gap-1.5"
                 >
@@ -623,7 +656,7 @@
                     ><span class="font-bold text-purple-700">2.4 km</span>
                   </div>
                 </div>
-              </div>
+              </div> -->
               <div class="bg-slate-50 rounded-lg p-4 border border-slate-200">
                 <h4
                   class="text-xs font-bold text-purple-950 uppercase tracking-wider mb-2 flex items-center gap-1.5"
@@ -956,6 +989,100 @@
       // --- MASTER DATASET ---
       const siteData = {};
 
+      // --- PORTFOLIOS STATE ---
+      let portfolios = JSON.parse(localStorage.getItem("horizonPortfolios")) || {
+        "default": { id: "default", name: "Default Portfolio", created: new Date().toLocaleDateString() }
+      };
+      let currentPortfolioId = localStorage.getItem("horizonCurrentPortfolio") || "default";
+
+      function savePortfolios() {
+        localStorage.setItem("horizonPortfolios", JSON.stringify(portfolios));
+        localStorage.setItem("horizonCurrentPortfolio", currentPortfolioId);
+      }
+
+      // --- PORTFOLIO LOGIC ---
+      function createNewPortfolio() {
+        const name = prompt("Enter new portfolio name:");
+        if (!name) return;
+        const id = "port_" + Date.now();
+        portfolios[id] = {
+          id,
+          name,
+          created: new Date().toLocaleDateString(),
+        };
+        savePortfolios();
+        renderPortfoliosList();
+      }
+
+      function deletePortfolio(id) {
+        if (id === "default") {
+          alert("Cannot delete the default portfolio.");
+          return;
+        }
+        if (confirm("Are you sure you want to delete this portfolio? Assets inside will remain orphaned or can be handled later.")) {
+          delete portfolios[id];
+          if (currentPortfolioId === id) currentPortfolioId = "default";
+          savePortfolios();
+          renderPortfoliosList();
+        }
+      }
+
+      function viewPortfolio(id) {
+        currentPortfolioId = id;
+        savePortfolios();
+        document.getElementById('current-portfolio-title').innerText = `${portfolios[id].name} - Assets`;
+        switchView("upload");
+      }
+
+      function renderPortfoliosList() {
+        const container = document.getElementById("portfolio-list-container");
+        if (!container) return;
+        container.innerHTML = "";
+        
+        Object.values(portfolios).forEach(port => {
+          const assetCount = Object.values(siteData).filter(s => s.portfolioId === port.id || (!s.portfolioId && port.id === 'default')).length;
+          
+          const div = document.createElement("div");
+          div.className = "bg-white border border-slate-200 rounded-xl p-5 flex items-center justify-between shadow-sm";
+          div.innerHTML = `
+            <div>
+              <h3 class="font-bold text-slate-800 text-lg">${escapeHtml(port.name)}</h3>
+              <p class="text-xs text-slate-500 mt-1">${assetCount} assets • Created ${port.created}</p>
+            </div>
+            <div class="flex gap-3">
+              <button onclick="viewPortfolio('${port.id}')" class="bg-purple-700 hover:bg-purple-800 text-white font-semibold text-sm px-4 py-2 rounded-lg transition flex items-center gap-2">
+                 <i data-lucide="eye" class="w-4 h-4"></i> View Portfolio
+              </button>
+              <button onclick="deletePortfolio('${port.id}')" class="bg-red-500 hover:bg-red-600 text-white font-semibold text-sm px-4 py-2 rounded-lg transition flex items-center gap-2">
+                 <i data-lucide="trash-2" class="w-4 h-4"></i> Delete
+              </button>
+            </div>
+          `;
+          container.appendChild(div);
+        });
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+      }
+
+      function renderDashboardPortfolioSelector() {
+        const selector = document.getElementById("dashboardPortfolioSelector");
+        if (!selector) return;
+        selector.innerHTML = "";
+        Object.values(portfolios).forEach(port => {
+          const opt = document.createElement("option");
+          opt.value = port.id;
+          opt.textContent = port.name;
+          if (port.id === currentPortfolioId) opt.selected = true;
+          selector.appendChild(opt);
+        });
+      }
+
+      function changeDashboardPortfolio(id) {
+        currentPortfolioId = id;
+        savePortfolios();
+        populateDashboardCards();
+        refreshPortfolioMap();
+      }
+
       // --- API CONFIG ---
       const API_BASE =
         window.location.origin.includes("5000") ||
@@ -984,27 +1111,25 @@
       let constructionLayer = null;
 
       // --- MAP UTILITIES ---
-      function setupBaseMapToggle(map, defaultMode = "osm") {
-        const osmLayer = L.tileLayer(
-          "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-          {
-            attribution: "© OpenStreetMap contributors",
-            maxZoom: 19,
-          },
+      function setupBaseMapToggle(map, defaultMode = "street") {
+        const googleKeyParam = window.GOOGLE_MAPS_API_KEY
+          ? `&key=${window.GOOGLE_MAPS_API_KEY}`
+          : "";
+
+        const googleStreet = L.tileLayer(
+          `https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}${googleKeyParam}`,
+          { maxZoom: 20, attribution: "© Google" },
         );
-        const satelliteLayer = L.tileLayer(
-          "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-          {
-            attribution: "Tiles © Esri",
-            maxZoom: 19,
-          },
+        const googleSatellite = L.tileLayer(
+          `https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}${googleKeyParam}`,
+          { maxZoom: 20, attribution: "© Google" },
         );
 
-        let currentMode = defaultMode;
+        let currentMode = defaultMode === "satellite" ? "satellite" : "street";
         if (currentMode === "satellite") {
-          satelliteLayer.addTo(map);
+          googleSatellite.addTo(map);
         } else {
-          osmLayer.addTo(map);
+          googleStreet.addTo(map);
         }
 
         const CustomToggle = L.Control.extend({
@@ -1024,26 +1149,25 @@
             // Satellite icon (lucide-satellite)
             const satIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-slate-700"><path d="M13 7 9 3 5 7l4 4"/><path d="m17 11 4 4-4 4-4-4"/><path d="m8 12 4 4 6-6-4-4Z"/><path d="m16 8 3-3"/><path d="M9 21a6 6 0 0 0-6-6"/></svg>`;
 
-            btn.innerHTML = currentMode === "osm" ? satIcon : mapIcon;
+            btn.innerHTML = currentMode === "street" ? satIcon : mapIcon;
 
             btn.onclick = function (e) {
               e.preventDefault();
               e.stopPropagation();
-              if (currentMode === "osm") {
-                map.removeLayer(osmLayer);
-                satelliteLayer.addTo(map);
-                satelliteLayer.bringToBack();
+              if (currentMode === "street") {
+                map.removeLayer(googleStreet);
+                googleSatellite.addTo(map);
+                googleSatellite.bringToBack();
                 currentMode = "satellite";
                 btn.innerHTML = mapIcon;
               } else {
-                map.removeLayer(satelliteLayer);
-                osmLayer.addTo(map);
-                osmLayer.bringToBack();
-                currentMode = "osm";
+                map.removeLayer(googleSatellite);
+                googleStreet.addTo(map);
+                googleStreet.bringToBack();
+                currentMode = "street";
                 btn.innerHTML = satIcon;
               }
             };
-            // Prevent clicks from falling through to the map
             L.DomEvent.disableClickPropagation(btn);
             return btn;
           },
@@ -1121,20 +1245,23 @@
         return poly;
       }
 
-      function initPortfolioMap() {
-        if (portfolioMap) return;
-        portfolioMap = L.map("portfolioMap", {
-          zoomControl: true,
-          scrollWheelZoom: true,
-          fullscreenControl: true,
+      function refreshPortfolioMap() {
+        if (!portfolioMap) return;
+        
+        // Clear map polygons
+        portfolioMap.eachLayer((layer) => {
+          if (layer instanceof L.Polygon) portfolioMap.removeLayer(layer);
         });
-        setupBaseMapToggle(portfolioMap, "osm");
+        
+        // Clear sidebar list
+        const listEl = document.getElementById("portfolio-site-list");
+        if (listEl) listEl.innerHTML = "";
 
         const allLayers = [];
-        const listEl = document.getElementById("portfolio-site-list");
-        listEl.innerHTML = "";
-
         Object.entries(sitePolygons).forEach(([sid, site]) => {
+          // Filter by portfolio
+          if (siteData[sid] && siteData[sid].portfolioId !== currentPortfolioId && !(currentPortfolioId === 'default' && !siteData[sid].portfolioId)) return;
+          
           const poly = renderPortfolioSite(sid, site, portfolioMap, listEl);
           allLayers.push(poly);
         });
@@ -1145,6 +1272,17 @@
             padding: [30, 30],
           });
         }
+      }
+
+      function initPortfolioMap() {
+        if (portfolioMap) return;
+        portfolioMap = L.map("portfolioMap", {
+          zoomControl: true,
+          scrollWheelZoom: true,
+          fullscreenControl: true,
+        });
+        setupBaseMapToggle(portfolioMap, "street");
+        refreshPortfolioMap();
       }
 
       // --- INITIALIZATION ---
@@ -1235,14 +1373,29 @@
 
         // Show Active View & Update Nav Tab
         document.getElementById(`view-${viewName}`).classList.remove("hidden");
-        let activeBtn = document.getElementById(`nav-${viewName}`);
-        activeBtn.classList.remove("text-slate-500", "border-transparent");
-        activeBtn.classList.add(
-          "text-purple-700",
-          "bg-white",
-          "border-purple-700",
-          "shadow-[0_-4px_6px_-6px_rgba(0,0,0,0.1)]",
-        );
+
+        // Set Active Nav Tab
+        let activeNavId = `nav-${viewName}`;
+        if (viewName === 'upload') activeNavId = 'nav-portfolios'; // upload is nested under portfolios tab
+        
+        const activeBtn = document.getElementById(activeNavId);
+        if (activeBtn) {
+          activeBtn.classList.remove("text-slate-500", "border-transparent");
+          activeBtn.classList.add(
+            "text-purple-700",
+            "bg-white",
+            "border-purple-700",
+            "shadow-[0_-4px_6px_-6px_rgba(0,0,0,0.1)]",
+          );
+        }
+
+        // View specific initializations
+        if (viewName === "portfolios") {
+          renderPortfoliosList();
+        } else if (viewName === "dashboard") {
+          renderDashboardPortfolioSelector();
+          populateDashboardCards(); // Refresh dashboard cards for current portfolio
+        }
 
         if (viewName === "catchment" && !layersLoaded && !layersLoading) {
           fetchLayersFromBackend();
@@ -1250,9 +1403,13 @@
 
         // Update Header texts
         const titles = {
+          portfolios: {
+            t: "Portfolio Management",
+            s: "Manage your asset portfolios",
+          },
           upload: {
-            t: "Asset Upload Engine",
-            s: "Import KML/KMZ boundaries for geospatial conversion",
+            t: "Portfolio Management",
+            s: "Manage your asset portfolios to assess climate risk",
           },
           dashboard: {
             t: "Portfolio Dashboard",
@@ -1285,17 +1442,16 @@
         }
       }
 
-      // --- DASHBOARD POPULATION ---
-      function updateDashboardStats() {
-        const all = Object.values(siteData);
-        document.getElementById("statTotal").textContent = all.length;
-        document.getElementById("statOwn").textContent = all.filter(
-          (s) => s.type === "own",
-        ).length;
-        document.getElementById("statComp").textContent = all.filter(
-          (s) => s.type === "comp",
-        ).length;
-      }
+    function updateDashboardStats() {
+      const all = Object.values(siteData).filter(s => s.portfolioId === currentPortfolioId || (!s.portfolioId && currentPortfolioId === 'default'));
+      document.getElementById("statTotal").textContent = all.length;
+      document.getElementById("statOwn").textContent = all.filter(
+        (s) => s.type === "own",
+      ).length;
+      document.getElementById("statComp").textContent = all.filter(
+        (s) => s.type === "comp",
+      ).length;
+    }
 
       function populateConstructionSelectors() {
         const primarySelect = document.getElementById("primaryTarget");
@@ -1337,6 +1493,8 @@
         let hasOwn = false;
 
         Object.values(siteData).forEach((site) => {
+          if (site.portfolioId !== currentPortfolioId && !(currentPortfolioId === 'default' && !site.portfolioId)) return;
+
           if (site.type === "own") {
             hasOwn = true;
             // Add to Catchment Selector
@@ -1365,6 +1523,8 @@
         populateSelectors();
 
         Object.values(siteData).forEach((site) => {
+          if (site.portfolioId !== currentPortfolioId && !(currentPortfolioId === 'default' && !site.portfolioId)) return;
+
           const badge =
             site.type === "own"
               ? `<span class="bg-purple-100 text-purple-700 px-2 py-0.5 rounded text-[10px] font-bold">OWN ASSET</span>`
@@ -1726,6 +1886,7 @@
 
         siteData[newId] = {
           id: newId,
+          portfolioId: currentPortfolioId,
           name,
           type,
           location: loc,
@@ -2067,7 +2228,7 @@
             scrollWheelZoom: true,
             fullscreenControl: true,
           });
-          setupBaseMapToggle(catchmentMap, "osm");
+          setupBaseMapToggle(catchmentMap, "street");
 
           catchmentBaseLayerGroup = L.layerGroup().addTo(catchmentMap);
           catchmentEncumbranceLayerGroup = L.layerGroup().addTo(catchmentMap);
@@ -2661,7 +2822,7 @@
             attributionControl: true,
             fullscreenControl: true,
           }).setView([0, 0], 2);
-          setupBaseMapToggle(constructionMap, "osm");
+          setupBaseMapToggle(constructionMap, "street");
         }
 
         // Force Leaflet to recalculate container bounds
