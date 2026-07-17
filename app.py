@@ -14,6 +14,7 @@ BASE_DIR = os.path.dirname(__file__)
 DATASITE_DIR = os.path.join(os.path.dirname(BASE_DIR), 'DataSite')
 CATCHMENTS_DIR = os.path.join(DATASITE_DIR, 'Catchments')
 LAYERS_DIR = os.path.join(DATASITE_DIR, 'Layers')
+SITEPOLYGON_DIR = os.path.join(DATASITE_DIR, 'SitePolygon')
 
 def safe_path(base_dir, path):
     """Ensure path resolves to a file within base_dir to prevent traversal."""
@@ -72,6 +73,13 @@ def index():
 @app.route('/Layers/<path:filename>')
 def serve_layers(filename):
     filepath = safe_path(LAYERS_DIR, filename)
+    if filepath is None or not os.path.exists(filepath):
+        return "Not found", 404
+    return send_from_directory(os.path.dirname(filepath), os.path.basename(filepath))
+
+@app.route('/SitePolygon/<path:filename>')
+def serve_site_polygon(filename):
+    filepath = safe_path(SITEPOLYGON_DIR, filename)
     if filepath is None or not os.path.exists(filepath):
         return "Not found", 404
     return send_from_directory(os.path.dirname(filepath), os.path.basename(filepath))
