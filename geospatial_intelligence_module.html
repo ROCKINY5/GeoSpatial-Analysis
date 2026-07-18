@@ -2604,6 +2604,77 @@
         renderLayerToggles();
       });
 
+      let catchmentInfoVisible = false;
+      function setupCatchmentInfoToggle(map) {
+        const CustomToggle = L.Control.extend({
+          options: { position: "topleft" },
+          onAdd: function (map) {
+            const btn = L.DomUtil.create(
+              "button",
+              "leaflet-bar leaflet-control bg-white flex items-center justify-center hover:bg-slate-50 transition shadow-sm",
+            );
+            btn.style.width = "34px";
+            btn.style.height = "34px";
+            btn.style.cursor = "pointer";
+            btn.title = "Toggle Site Info";
+
+            const iconOff = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-slate-700"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>`;
+            const iconOn = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#7e22ce" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>`;
+
+            btn.innerHTML = catchmentInfoVisible ? iconOn : iconOff;
+
+            btn.onclick = function (e) {
+              e.preventDefault();
+              e.stopPropagation();
+              catchmentInfoVisible = !catchmentInfoVisible;
+              btn.innerHTML = catchmentInfoVisible ? iconOn : iconOff;
+              
+              // Remove existing static tooltip if any
+              catchmentBaseLayerGroup.eachLayer((layer) => {
+                if (layer instanceof L.Tooltip && layer.options.permanent) {
+                  catchmentBaseLayerGroup.removeLayer(layer);
+                }
+              });
+
+              if (catchmentInfoVisible && catchmentBaseLayerGroup) {
+                let polyBounds = null;
+                catchmentBaseLayerGroup.eachLayer((layer) => {
+                  if (layer instanceof L.Polygon && !(layer instanceof L.Circle)) {
+                    polyBounds = layer.getBounds();
+                  }
+                });
+
+                if (polyBounds) {
+                  const selector = document.getElementById("catchmentAssetSelector");
+                  const activeName = selector?.options[selector.selectedIndex]?.text || "Selected Site";
+                  const tooltipContent = `
+                    <div style="white-space: nowrap; margin: 0; padding: 0;">
+                        <span class="font-bold text-slate-800" style="font-size: 11px; vertical-align: middle;">${escapeHtml(activeName.replace(/^.*?-\s*/, ''))}</span>
+                        <span class="font-bold text-purple-700 uppercase" style="font-size: 9px; vertical-align: middle; margin-left: 6px;">Own</span>
+                    </div>
+                  `;
+                  const topCenter = L.latLng(polyBounds.getNorth(), polyBounds.getCenter().lng);
+                  L.tooltip({
+                    permanent: true,
+                    direction: "top",
+                    className: "custom-map-tooltip rounded-lg border-slate-200 shadow-sm",
+                  })
+                    .setLatLng(topCenter)
+                    .setContent(tooltipContent)
+                    .addTo(catchmentBaseLayerGroup);
+                }
+              }
+
+              // Also trigger a redraw of encumbrance layers so their tooltips update
+              redrawEncumbranceLayers();
+            };
+            L.DomEvent.disableClickPropagation(btn);
+            return btn;
+          },
+        });
+        map.addControl(new CustomToggle());
+      }
+
       async function runCatchmentAnalysis() {
         const selector = document.getElementById("catchmentAssetSelector");
         const selectedSiteId = selector ? selector.value : null;
@@ -2652,6 +2723,7 @@
             preferCanvas: true, // Forces html2canvas to capture vector shapes properly
           });
           setupBaseMapToggle(catchmentMap, "street");
+          setupCatchmentInfoToggle(catchmentMap);
           setupMapDownloadButton(catchmentMap, "catchment_analysis_map.png");
 
           catchmentBaseLayerGroup = L.layerGroup().addTo(catchmentMap);
@@ -2684,11 +2756,34 @@
             fillOpacity: 0.3,
             weight: 2,
           });
-          poly.bindTooltip(activeSite.name, {
+          
+          const tooltipContent = `
+            <div style="white-space: nowrap; margin: 0; padding: 0;">
+                <span class="font-bold text-slate-800" style="font-size: 11px; vertical-align: middle;">${escapeHtml(activeSite.name)}</span>
+                <span class="font-bold text-purple-700 uppercase" style="font-size: 9px; vertical-align: middle; margin-left: 6px;">Own</span>
+            </div>
+          `;
+
+          poly.bindTooltip(tooltipContent, {
             permanent: false,
             sticky: true,
+            className: "custom-map-tooltip rounded-lg border-slate-200 shadow-sm",
           });
           poly.addTo(catchmentBaseLayerGroup);
+
+          if (catchmentInfoVisible) {
+            const bounds = poly.getBounds();
+            const topCenter = L.latLng(bounds.getNorth(), bounds.getCenter().lng);
+            const staticTooltip = L.tooltip({
+              permanent: true,
+              direction: "top",
+              className: "custom-map-tooltip rounded-lg border-slate-200 shadow-sm",
+            })
+              .setLatLng(topCenter)
+              .setContent(tooltipContent);
+
+            staticTooltip.addTo(catchmentBaseLayerGroup);
+          }
 
           catchmentMap.fitBounds(poly.getBounds(), {
             padding: [40, 40],
@@ -2938,7 +3033,9 @@
                 const name = feature.properties && feature.properties.name;
                 lyr.bindTooltip(def.name + (name ? ": " + name : ""), {
                   className: "custom-map-tooltip",
-                  sticky: true,
+                  sticky: !catchmentInfoVisible,
+                  permanent: catchmentInfoVisible,
+                  direction: "top",
                 });
               },
             }).addTo(catchmentEncumbranceLayerGroup);
