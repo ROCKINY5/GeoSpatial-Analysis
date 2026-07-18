@@ -45,7 +45,7 @@
 			.custom-map-tooltip {
 				background: rgba(255, 255, 255, 0.95);
 				backdrop-filter: blur(4px);
-				padding: 8px 12px;
+				padding: 2px 5px !important;
 				pointer-events: none;
 			}
 
@@ -582,7 +582,7 @@
 					<h3 class="text-sm font-bold text-slate-900">
 						Active Portfolio Details
 					</h3>
-					<div class="flex gap-2">
+					<!-- <div class="flex gap-2">
 						<button
 							onclick="exportPortfolio()"
 							class="bg-white border border-slate-200 text-slate-600 px-3 py-1.5 rounded text-xs font-semibold hover:bg-slate-50 flex items-center gap-1"
@@ -590,7 +590,7 @@
 							<i data-lucide="download" class="w-3.5 h-3.5"></i>
 							Export Backup
 						</button>
-					</div>
+					</div> -->
 				</div>
 				<div
 					class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
@@ -1256,7 +1256,7 @@
             </div>
             <div class="flex gap-3">
               <button onclick="viewPortfolio('${port.id}')" class="bg-purple-700 hover:bg-purple-800 text-white font-semibold text-sm px-4 py-2 rounded-lg transition flex items-center gap-2">
-                 <i data-lucide="eye" class="w-4 h-4"></i> View Portfolio
+                 <i data-lucide="eye" class="w-4 h-4"></i> Upload Site
               </button>
               <button onclick="editPortfolio('${port.id}')" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-sm px-4 py-2 rounded-lg transition flex items-center gap-2">
                  <i data-lucide="edit-2" class="w-4 h-4"></i> Edit
@@ -1489,18 +1489,10 @@
 							useCORS: true,
 							allowTaint: false,
 							backgroundColor: "#ffffff",
-							width: fullscreenCapture
-								? window.innerWidth
-								: mapContainer.offsetWidth,
-							height: fullscreenCapture
-								? window.innerHeight
-								: mapContainer.offsetHeight,
-							windowWidth: fullscreenCapture
-								? window.innerWidth
-								: mapContainer.offsetWidth,
-							windowHeight: fullscreenCapture
-								? window.innerHeight
-								: mapContainer.offsetHeight,
+							width: mapContainer.offsetWidth,
+							height: mapContainer.offsetHeight,
+							scrollX: 0,
+							scrollY: 0,
 						}),
 					)
 					.then((canvas) => {
@@ -1633,25 +1625,35 @@
 				const sd = siteData[sid] || site;
 				const desc = escapeHtml(sd.desc || "");
 				const loc = escapeHtml(sd.location || "");
-				poly.bindTooltip(
-					`
-                    <div class="p-1">
-                        <div class="font-bold text-slate-800 text-sm">${safeName}</div>
-                        <div class="text-[10px] text-purple-700 font-bold mb-1">${badge}</div>
-                    ${loc ? `<div class="text-xs text-slate-600 flex items-center gap-1 mb-1"><svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg> ${loc}</div>` : ""}
-                        ${desc ? `<div class="text-xs text-slate-500 italic truncate max-w-[200px]">${desc}</div>` : ""}
+				const tooltipContent = `
+                    <div class="flex items-center gap-1.5 whitespace-nowrap">
+                        <span class="font-bold text-slate-800 text-[11px] leading-none">${safeName}</span>
+                        <span class="text-[9px] font-bold ${site.type === "own" ? "text-purple-700" : "text-orange-600"} uppercase leading-none">${site.type === "own" ? "Own" : "Competitor"}</span>
                     </div>
-                `,
-					{
-						sticky: !portfolioInfoVisible,
-						permanent: portfolioInfoVisible,
-						direction: "top",
-						className:
-							"custom-map-tooltip rounded-lg border-slate-200 shadow-sm",
-					},
-				);
+                `;
+
+				poly.bindTooltip(tooltipContent, {
+					sticky: true,
+					permanent: false,
+					direction: "top",
+					className: "custom-map-tooltip rounded-lg border-slate-200 shadow-sm",
+				});
 
 				poly.addTo(map);
+
+				if (portfolioInfoVisible) {
+					const bounds = poly.getBounds();
+					const topCenter = L.latLng(bounds.getNorth(), bounds.getCenter().lng);
+					const staticTooltip = L.tooltip({
+						permanent: true,
+						direction: 'top',
+						className: 'custom-map-tooltip rounded-lg border-slate-200 shadow-sm',
+					})
+					.setLatLng(topCenter)
+					.setContent(tooltipContent);
+					
+					staticTooltip.addTo(map);
+				}
 
 				if (listEl) {
 					const div = document.createElement("div");
@@ -1673,9 +1675,9 @@
 			function refreshPortfolioMap() {
 				if (!portfolioMap) return;
 
-				// Clear map polygons
+				// Clear map polygons and standalone tooltips
 				portfolioMap.eachLayer((layer) => {
-					if (layer instanceof L.Polygon)
+					if (layer instanceof L.Polygon || layer instanceof L.Tooltip)
 						portfolioMap.removeLayer(layer);
 				});
 
@@ -3498,9 +3500,9 @@
 				updateLayerInfo();
 
 				document.getElementById("barChartSub").innerText =
-					`Development Balance at ${periods[periods.length - 1]}`;
+					`Development Progress at ${periods[periods.length - 1]}`;
 				document.getElementById("lineChartSub").innerText =
-					`CO% Trajectory — ${periods[0]} → ${periods[periods.length - 1]}`;
+					`${periods[0]} → ${periods[periods.length - 1]}`;
 
 				updateChartsData(activeSites, periods);
 			}
@@ -3688,6 +3690,8 @@
 					}
 
 					const color = siteRecord ? siteRecord.color : "#7c3aed";
+					const type = siteRecord ? (siteRecord.color === "#f97316" ? "Competitor" : "Own") : "Own";
+					const typeColor = type === "Own" ? "text-purple-700" : "text-orange-600";
 
 					constructionSitePolyLayer = L.polygon(coords, {
 						color: color,
@@ -3698,8 +3702,8 @@
 					});
 
 					constructionSitePolyLayer.bindTooltip(
-						`<div class="p-1"><div class="font-bold text-slate-800 text-sm">${escapeHtml(csvName)}</div><div class="text-[10px] text-slate-500">Site Boundary</div></div>`,
-						{ sticky: true, className: "custom-map-tooltip rounded-lg border-slate-200 shadow-sm" },
+						`<div class="flex items-center gap-1.5 whitespace-nowrap"><span class="font-bold text-slate-800 text-[11px] leading-none">${escapeHtml(csvName)}</span><span class="text-[9px] font-bold ${typeColor} uppercase leading-none">${type}</span></div>`,
+						{ sticky: true, className: "custom-map-tooltip rounded border-slate-200 shadow-sm" },
 					);
 
 					// Only add to map if development layer is currently OFF
