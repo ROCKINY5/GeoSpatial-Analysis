@@ -2925,10 +2925,11 @@
               },
               pointToLayer: (feature, latlng) =>
                 L.circleMarker(latlng, {
-                  radius: 5,
+                  renderer: sharedCanvasRenderer,
+                  radius: 6,
                   fillColor: def.color,
                   color: "#fff",
-                  weight: 1,
+                  weight: 1.5,
                   opacity: 1,
                   fillOpacity: 0.8,
                   interactive: true,
@@ -3421,9 +3422,9 @@
 
           const color = siteRecord ? siteRecord.color : "#7c3aed";
           const type = siteRecord
-            ? siteRecord.color === "#f97316"
-              ? "Competitor"
-              : "Own"
+            ? siteRecord.color === "#7c3aed"
+              ? "Own"
+              : "Competitor"
             : "Own";
           const typeColor =
             type === "Own" ? "text-purple-700" : "text-orange-600";
